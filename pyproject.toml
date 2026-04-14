@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trust-gate-mcp"
+version = "0.1.0"
+description = "MCP server for Trust Gate — policy-gated AI decisions with Ed25519 cryptographic receipts"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+keywords = ["mcp", "trust", "ai-safety", "decision-trust", "trustatom", "ed25519"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "mcp>=1.7.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.urls]
+Homepage = "https://cwn-trust-gate.onrender.com"
+Repository = "https://github.com/cyber-warrior-network/trust-gate-mcp"
+Issues = "https://github.com/cyber-warrior-network/trust-gate-mcp/issues"
+
+[project.scripts]
+trust-gate-mcp = "trust_gate_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trust_gate_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

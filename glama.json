@@ -1,0 +1,137 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "name": "trust-gate-mcp",
+  "displayName": "Trust Gate",
+  "version": "0.1.0",
+  "description": "Policy-gated AI decisions with Ed25519 cryptographic receipts. Every decision produces a verifiable receipt — no receipt, no trust.",
+  "author": {
+    "name": "Cyber Warrior Network",
+    "url": "https://cwn-trust-gate.onrender.com"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://cwn-trust-gate.onrender.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cyber-warrior-network/trust-gate-mcp"
+  },
+  "keywords": [
+    "trust",
+    "ai-safety",
+    "decision-trust",
+    "trustatom",
+    "ed25519",
+    "opa",
+    "policy",
+    "audit",
+    "compliance",
+    "eu-ai-act",
+    "ai-governance"
+  ],
+  "categories": [
+    "security",
+    "ai-safety",
+    "compliance",
+    "developer-tools"
+  ],
+  "runtime": {
+    "type": "python",
+    "minVersion": "3.10",
+    "entrypoint": "trust-gate-mcp",
+    "install": "pip install trust-gate-mcp",
+    "installViaUv": "uv pip install trust-gate-mcp",
+    "runViaUvx": "uvx trust-gate-mcp"
+  },
+  "transport": {
+    "type": "stdio"
+  },
+  "configuration": {
+    "required": [
+      "TRUST_GATE_API_KEY"
+    ],
+    "env": {
+      "TRUST_GATE_API_KEY": {
+        "description": "Bearer token for the Trust Gate API.",
+        "secret": true,
+        "example": "tg_live_..."
+      },
+      "TRUST_GATE_URL": {
+        "description": "Trust Gate API base URL.",
+        "default": "https://cwn-trust-gate.onrender.com",
+        "optional": true
+      },
+      "TRUST_GATE_TENANT": {
+        "description": "Default tenant ID for multi-tenant deployments.",
+        "default": "default",
+        "optional": true
+      },
+      "TRUST_GATE_TIMEOUT": {
+        "description": "HTTP timeout in seconds.",
+        "default": "30",
+        "optional": true
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "gate_decision",
+      "description": "Gate an AI decision through OPA policy and mint a cryptographic receipt.",
+      "riskLevel": "medium",
+      "arguments": {
+        "action": "Action type (DEPLOY, GRAPH_WRITE, EXPORT_INTEGRATION, CODE_GENERATION, MODIFY_POLICY, GRAPH_READ, READ_EVIDENCE)",
+        "agent_id": "Unique agent identifier",
+        "resource_id": "Resource being acted upon",
+        "tenant_id": "Tenant context (default: 'default')",
+        "env": "Environment (SANDBOX, PRODUCTION, STAGING)",
+        "parent_decision_id": "Parent decision for chain linking (optional)",
+        "human_approved": "Whether a human explicitly approved this action"
+      }
+    },
+    {
+      "name": "verify_receipt",
+      "description": "Mathematically verify a TrustAtom receipt's Ed25519 signature.",
+      "riskLevel": "low",
+      "arguments": {
+        "evidence_hash": "SHA-256 hash of the decision evidence",
+        "signature": "Base64-encoded Ed25519 signature",
+        "public_key": "Base64-encoded Ed25519 public key (optional — falls back to registry)"
+      }
+    },
+    {
+      "name": "check_policy",
+      "description": "Dry-run a policy evaluation without minting a receipt.",
+      "riskLevel": "low",
+      "arguments": {
+        "action": "Action type to evaluate",
+        "agent_id": "Agent identifier",
+        "resource_id": "Resource identifier",
+        "tenant_id": "Tenant context (default: 'default')",
+        "env": "Environment (SANDBOX, PRODUCTION, STAGING)"
+      }
+    },
+    {
+      "name": "health",
+      "description": "Check Trust Gate connectivity and service status.",
+      "riskLevel": "low",
+      "arguments": {}
+    }
+  ],
+  "security": {
+    "sandboxed": false,
+    "handlesSecrets": true,
+    "externalNetwork": [
+      "cwn-trust-gate.onrender.com"
+    ],
+    "authMethod": "bearer-token",
+    "verifiable": true,
+    "auditTrail": "Every decision produces an Ed25519-signed TrustAtom receipt stored in an immutable Neo4j graph."
+  },
+  "metadata": {
+    "ai_safety_category": "policy-enforcement",
+    "compliance_frameworks": ["EU AI Act", "SOC 2", "NIST AI RMF", "CMMC"],
+    "novel_capabilities": [
+      "Cryptographic decision receipts (industry-first)",
+      "Mathematical verification without server trust",
+      "Immutable decision graph (append-only, Landauer principle)"
+    ]
+  }
+}
