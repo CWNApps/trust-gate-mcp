@@ -74,6 +74,57 @@ def main() -> None:
     async def server_card(_request):
         return JSONResponse(SERVER_CARD)
 
+    # Telemetry endpoint for agentic-distribution attribution.
+    # Each external listing/PR uses ?via=<channel> on its trust-gate-mcp link.
+    # When a human or agent lands on the page (or follows a link), the landing-page
+    # JS pings /x with the channel + kind, and /x logs ONE line to stderr (which
+    # Render captures + lets us aggregate per-channel). No DB, no IPs, no cookies --
+    # just channel + UA family + kind. Privacy-respecting by design.
+    #
+    # The canonical channel registry (kept in code so it's auditable):
+    KNOWN_CHANNELS = {
+        # Phase A: registries + awesome lists
+        "mcp-so", "pulsemcp", "mcp-get",
+        "awesome-mcp-mcp",        # modelcontextprotocol/servers (official MCP list)
+        "awesome-mcp-punkpeye",   # punkpeye/awesome-mcp-servers
+        "awesome-mcp-appcypher",  # appcypher/awesome-mcp-servers
+        # Phase B reserved (framework adapters)
+        "langchain", "crewai", "llamaindex", "autogen", "pydantic-ai", "letta", "langgraph",
+        # Phase C reserved (community channels)
+        "moltbook", "agentops", "mcp-discord", "owasp-agentic", "reddit", "hn",
+        # Phase D reserved (authority weave)
+        "substack", "linkedin", "twitter",
+        # Bookkeeping
+        "smithery",   # smithery.ai listing back-click
+        "github",     # github repo back-click
+        "direct",     # no via -- direct URL
+    }
+
+    def _ua_family(ua: str) -> str:
+        """Coarse UA family for aggregation. NOT a fingerprint -- we only want one of
+        a handful of buckets: browser, mcp-client, scanner, curl, other."""
+        if not ua:
+            return "unknown"
+        u = ua.lower()
+        if "smithery" in u or "smitherybot" in u: return "smithery-scan"
+        if "mcp" in u and "browser" not in u:     return "mcp-client"
+        if "curl" in u or "wget" in u or "python-requests" in u: return "curl-like"
+        if "bot" in u or "crawler" in u or "spider" in u:        return "bot"
+        if "mozilla" in u or "chrome" in u or "safari" in u or "firefox" in u: return "browser"
+        return "other"
+
+    async def telemetry(request):
+        via_raw = (request.query_params.get("via") or "direct").strip().lower()
+        # NEVER trust user input as a channel name; bucket unknowns
+        via = via_raw if via_raw in KNOWN_CHANNELS else "unknown"
+        kind = (request.query_params.get("kind") or "page").strip().lower()
+        if kind not in ("page", "api", "card", "follow"):
+            kind = "page"
+        ua_family = _ua_family(request.headers.get("user-agent", ""))
+        # One structured line to stderr -- Render captures + we can grep/aggregate
+        print(f"[telemetry] via={via} kind={kind} ua={ua_family}", file=sys.stderr)
+        return JSONResponse({"ok": True, "via": via, "kind": kind, "ua_family": ua_family})
+
     # Friendly landing page for humans who paste the bare URL into a browser.
     # Anyone hitting the / route is NOT an MCP client (those POST to /mcp). Serving
     # a small DDU-themed HTML page is more useful than a 404 from Starlette.
@@ -100,6 +151,19 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
 </style>
 <div class="kick">Cyber Warrior Network</div>
 <h1>Trust Gate <span>MCP.</span></h1>
+<script>
+// Channel-attribution ping. Fires once on landing.
+// ?via=<channel> -> /x?via=<channel>&kind=page. NEVER sends any PII.
+(function(){
+  try {
+    var m = (location.search.match(/[?&]via=([^&]+)/) || [null, "direct"]);
+    var via = decodeURIComponent(m[1]).toLowerCase();
+    fetch("/x?via=" + encodeURIComponent(via) + "&kind=page",
+          {method:"GET", credentials:"omit", cache:"no-store"})
+      .catch(function(){});  // fire-and-forget; never block render
+  } catch(e) {}
+})();
+</script>
 <p>Post-quantum, tamper-evident receipts for consequential agent actions. Four tools, one shared signing primitive (Ed25519 + ML-DSA-65 + SLH-DSA via OpenAgentOntology). Verifiable offline from the certificate alone.</p>
 <p><span class="tag">No receipt</span><span class="tag">No trust</span></p>
 <hr>
@@ -132,6 +196,7 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
     app = Starlette(
         routes=[
             Route("/", landing, methods=["GET"]),
+            Route("/x", telemetry, methods=["GET"]),
             Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
             Mount("/", app=inner_mcp_app),
         ],
