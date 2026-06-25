@@ -9,7 +9,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip
 # Pin the runtime deps. The post-quantum legs come from openagentontology[pq].
 RUN pip install --no-cache-dir \
         "mcp>=1.12,<2" \
-        "openagentontology[pq]>=0.1" \
+        "openagentontology[pq] @ git+https://github.com/CWNApps/openagentontology.git@main" \
         "uvicorn>=0.30" \
         "starlette>=0.37"
 
