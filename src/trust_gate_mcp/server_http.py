@@ -23,7 +23,8 @@ def main() -> None:
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
     from starlette.middleware.cors import CORSMiddleware
-    from starlette.routing import Mount
+    from starlette.responses import JSONResponse
+    from starlette.routing import Mount, Route
 
     # Ensure the persistent signing key + metadata exist BEFORE we accept any traffic.
     # Aborts (exit 78) if the on-disk metadata's kid mismatches the live key -- a silent
@@ -34,6 +35,38 @@ def main() -> None:
 
     mcp_server = build_server()
 
+    # Static server card so a directory/scanner that cannot complete a Streamable HTTP
+    # handshake (e.g. behind a strict redirect, behind an auth wall, etc.) can still
+    # learn the server's identity + tool surface. Documented at
+    # https://smithery.ai/docs/build/publish (Static Server Card section).
+    SERVER_CARD = {
+        "schemaVersion": "v1",
+        "name": "trust-gate",
+        "version": "0.2.0",
+        "description": ("Post-quantum, tamper-evident receipts for consequential agent "
+                        "actions. Four tools, one shared post-quantum primitive (Ed25519 + "
+                        "ML-DSA-65 + SLH-DSA via OpenAgentOntology). Verifiable offline."),
+        "homepage": "https://github.com/CWNApps/trust-gate-mcp",
+        "license": "Apache-2.0",
+        "tools": [
+            {"name": "mint_receipt_for_record_change",
+             "description": ("Mint a post-quantum receipt for one CRM record change. Old/new "
+                             "values are SHA-256 hashes. Works with any CRM.")},
+            {"name": "audit_my_agent_inventory",
+             "description": ("Rank a CALLER-PROVIDED list of MCP tools by worst-regret if "
+                             "they act. Read-only. Cannot auto-discover other servers "
+                             "(MCP protocol does not allow that).")},
+            {"name": "mint_action_receipt",
+             "description": "Mint a post-quantum receipt for any consequential agent action."},
+            {"name": "verify_receipt",
+             "description": ("Verify a Trust Gate receipt from the certificate alone (offline). "
+                             "Defaults to PQ-required mode -- defends against signature stripping.")},
+        ],
+    }
+
+    async def server_card(_request):
+        return JSONResponse(SERVER_CARD)
+
     # CORS posture follows the bearer-auth toggle:
     #   bearer off  -> allow_origins=['*'] (verify-as-public-good adoption path)
     #   bearer on   -> allow_origins from TRUST_GATE_ALLOWED_ORIGINS (no '*' with credentials)
@@ -43,8 +76,13 @@ def main() -> None:
           f"cors_origins={allowed}", file=sys.stderr)
 
     # FastMCP -> Streamable HTTP app, mounted at /mcp per the Smithery contract.
+    # Static server card at /.well-known/mcp/server-card.json lets directory scanners
+    # learn the tool surface without completing a Streamable HTTP handshake.
     app = Starlette(
-        routes=[Mount("/mcp", app=mcp_server.streamable_http_app())],
+        routes=[
+            Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
+            Mount("/mcp", app=mcp_server.streamable_http_app()),
+        ],
         middleware=[
             # CORS first so preflight passes before any auth check sees it.
             Middleware(CORSMiddleware, allow_origins=allowed,
