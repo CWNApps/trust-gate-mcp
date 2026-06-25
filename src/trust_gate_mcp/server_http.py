@@ -23,7 +23,7 @@ def main() -> None:
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
     from starlette.middleware.cors import CORSMiddleware
-    from starlette.responses import JSONResponse
+    from starlette.responses import HTMLResponse, JSONResponse
     from starlette.routing import Mount, Route
 
     # Ensure the persistent signing key + metadata exist BEFORE we accept any traffic.
@@ -74,6 +74,48 @@ def main() -> None:
     async def server_card(_request):
         return JSONResponse(SERVER_CARD)
 
+    # Friendly landing page for humans who paste the bare URL into a browser.
+    # Anyone hitting the / route is NOT an MCP client (those POST to /mcp). Serving
+    # a small DDU-themed HTML page is more useful than a 404 from Starlette.
+    LANDING_HTML = """<!doctype html>
+<meta charset="utf-8"><title>Trust Gate MCP</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--o:#FF4500;--c:#EFEBE2;--b:#0A0A0A;--m:JetBrains Mono,monospace}
+*{box-sizing:border-box;margin:0}
+body{background:var(--b);color:var(--c);font-family:DM Sans,system-ui,sans-serif;line-height:1.55;padding:48px 24px;max-width:760px;margin:0 auto}
+h1{font-family:Archivo Black,sans-serif;font-size:clamp(32px,5vw,52px);line-height:1.04;margin-bottom:14px}
+h1 span{color:var(--o)}
+p{font-size:16px;color:#cfcbc2;margin-bottom:18px}
+hr{border:0;border-top:1px solid #26261f;margin:28px 0}
+.kick{font-family:var(--m);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--o);margin-bottom:18px}
+ul{list-style:none;padding:0}
+li{padding:14px 0;border-bottom:1px solid #26261f;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+li:last-child{border:0}
+li b{font-family:var(--m);font-size:12px;color:var(--o);letter-spacing:.1em}
+a{color:var(--c);text-decoration:none;border-bottom:1px solid var(--o);font-family:var(--m);font-size:13px;word-break:break-all}
+a:hover{color:var(--o)}
+.tag{display:inline-block;font-family:var(--m);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--o);padding:3px 10px;border:1px solid var(--o);margin-right:6px;margin-bottom:6px}
+footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
+</style>
+<div class="kick">Cyber Warrior Network</div>
+<h1>Trust Gate <span>MCP.</span></h1>
+<p>Post-quantum, tamper-evident receipts for consequential agent actions. Four tools, one shared signing primitive (Ed25519 + ML-DSA-65 + SLH-DSA via OpenAgentOntology). Verifiable offline from the certificate alone.</p>
+<p><span class="tag">No receipt</span><span class="tag">No trust</span></p>
+<hr>
+<ul>
+<li><b>MCP endpoint</b><a href="/mcp">/mcp</a></li>
+<li><b>Server card</b><a href="/.well-known/mcp/server-card.json">/.well-known/mcp/server-card.json</a></li>
+<li><b>Smithery</b><a href="https://smithery.ai/servers/apps/cwn-trust-gate">smithery.ai/servers/apps/cwn-trust-gate</a></li>
+<li><b>Source</b><a href="https://github.com/CWNApps/trust-gate-mcp">github.com/CWNApps/trust-gate-mcp</a></li>
+<li><b>OAO primitive</b><a href="https://github.com/CWNApps/openagentontology">github.com/CWNApps/openagentontology</a></li>
+</ul>
+<footer>Apache-2.0. Hardened to CWN pol.must_do.150 (Quantum Hardening + Codex Delivery Completeness).</footer>
+"""
+
+    async def landing(_request):
+        return HTMLResponse(LANDING_HTML)
+
     # CORS posture follows the bearer-auth toggle:
     #   bearer off  -> allow_origins=['*'] (verify-as-public-good adoption path)
     #   bearer on   -> allow_origins from TRUST_GATE_ALLOWED_ORIGINS (no '*' with credentials)
@@ -89,6 +131,7 @@ def main() -> None:
     # over the catch-all Mount.
     app = Starlette(
         routes=[
+            Route("/", landing, methods=["GET"]),
             Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
             Mount("/", app=inner_mcp_app),
         ],
