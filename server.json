@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.cwnapps/trust-gate-mcp",
+  "title": "Trust Gate",
+  "description": "Post-quantum, tamper-evident receipts for agent actions. Ed25519 + ML-DSA-65, offline verify.",
+  "websiteUrl": "https://trust-gate-mcp.onrender.com",
+  "repository": {
+    "url": "https://github.com/CWNApps/trust-gate-mcp",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://trust-gate-mcp.onrender.com/mcp"
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "tool": "mcp-publisher",
+      "version": "1.7.9",
+      "build_info": {
+        "deployed_on": "render.com",
+        "transport": "streamable-http",
+        "tools_count": 4,
+        "license": "Apache-2.0"
+      }
+    }
+  }
+}
