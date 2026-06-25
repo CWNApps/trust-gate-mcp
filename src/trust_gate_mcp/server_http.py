@@ -75,13 +75,15 @@ def main() -> None:
     print(f"[server_http] bearer_auth={'ON' if auth_on else 'OFF'} "
           f"cors_origins={allowed}", file=sys.stderr)
 
-    # FastMCP -> Streamable HTTP app, mounted at /mcp per the Smithery contract.
-    # Static server card at /.well-known/mcp/server-card.json lets directory scanners
-    # learn the tool surface without completing a Streamable HTTP handshake.
+    # FastMCP's streamable_http_app() already exposes the MCP transport at /mcp -- so we
+    # mount it at "/" (not "/mcp") to avoid double-prefixing it to /mcp/mcp. Smithery's
+    # scanner POSTs to https://server/mcp and the JSON-RPC request gets handled.
+    # The /.well-known/mcp/server-card.json Route is listed first so it takes priority
+    # over the catch-all Mount.
     app = Starlette(
         routes=[
             Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
-            Mount("/mcp", app=mcp_server.streamable_http_app()),
+            Mount("/", app=mcp_server.streamable_http_app()),
         ],
         middleware=[
             # CORS first so preflight passes before any auth check sees it.
