@@ -311,7 +311,14 @@ def build_server():
         "Trust Gate -- post-quantum, tamper-evident receipts for consequential agent actions. "
         "All receipts reuse the open-source OpenAgentOntology mint_receipt (Ed25519 + ML-DSA-65 + "
         "SLH-DSA). Verifiable offline from the receipt alone."
-    ), transport_security=security)
+    ), transport_security=security,
+        # json_response: return application/json instead of streaming text/event-stream.
+        # Required for one-shot directory scanners (e.g. Smithery) that POST a JSON-RPC
+        # call and wait for a JSON body, not an open SSE stream.
+        # stateless_http: every request handled independently, no mcp-session-id
+        # continuation needed. Safe for this tool surface -- none of the four tools share
+        # state across calls; each mint/verify is self-contained.
+        json_response=True, stateless_http=True)
 
     @mcp.tool(description="Mint a post-quantum receipt for one CRM record change. Old/new values "
               "are carried as SHA-256 hashes. Works with any CRM (Relaticle, hosted CRMs, custom).")
