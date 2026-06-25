@@ -107,7 +107,11 @@ def main() -> None:
         ],
     )
     port = int(os.environ.get("PORT", "8081"))
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    # proxy_headers + forwarded_allow_ips=* are needed behind Render's TLS proxy.
+    # Without them uvicorn rejects requests with "Invalid Host header" / 421
+    # because it doesn't trust X-Forwarded-Host from the upstream Cloudflare/Render layer.
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info",
+                proxy_headers=True, forwarded_allow_ips="*")
 
 
 if __name__ == "__main__":
