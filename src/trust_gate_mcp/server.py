@@ -146,13 +146,19 @@ def _verify(receipt: Dict[str, Any], *, require_pq: Optional[bool] = None) -> Di
     must = _require_pq_default() if require_pq is None else bool(require_pq)
     if must and out.get("ok") and out.get("signed"):
         legs = out.get("legs", {})
-        missing = [name for name in ("ml_dsa", "slh_dsa") if legs.get(name) != "ok"]
-        if missing:
+        pq_ok = any(legs.get(name) == "ok" for name in ("ml_dsa", "slh_dsa"))
+        if not pq_ok:
+            # No PQ leg verified -- either both stripped, or none installed. Either way the
+            # receipt has no quantum-resistant signature standing, so under PQ-required mode
+            # we refuse it. "At least one PQ leg ok" is the honest defense: an attacker who
+            # strips ALL PQ legs is caught; a server that installs only ML-DSA-65 (no SLH-DSA)
+            # still serves valid PQ verifications. Requiring BOTH was over-strict and broke
+            # consumers when the SLH-DSA backend was unavailable.
+            states = ", ".join(f"{n}={legs.get(n, 'absent')}" for n in ("ml_dsa", "slh_dsa"))
             out["ok"] = False
-            out["reason"] = ("PQ-required: " + ", ".join(missing) + " not verified ("
-                             + ", ".join(f"{m}={legs.get(m, 'absent')}" for m in missing) + "). "
-                             "Set OAO_REQUIRE_PQ=false or pass require_pq=False to allow "
-                             "Ed25519-only verification.")
+            out["reason"] = (f"PQ-required: no post-quantum signature leg verified ({states}). "
+                             "Set TRUST_GATE_REQUIRE_PQ=false (or pass require_pq=False) to "
+                             "allow Ed25519-only verification of legacy receipts.")
     return out
 
 
