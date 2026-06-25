@@ -4,6 +4,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# git is needed for the OAO install from a VCS URL until OAO is published to PyPI.
+# --no-install-recommends keeps the layer slim; we clean apt lists after to shave more.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m pip install --no-cache-dir --upgrade pip
 
 # Pin the runtime deps. The post-quantum legs come from openagentontology[pq].
