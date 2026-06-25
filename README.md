@@ -1,133 +1,43 @@
-# Trust Gate MCP Server
+# Trust Gate MCP
 
-**Decision Trust for AI Agents** — gate any AI decision through OPA policies and mint Ed25519 cryptographic receipts.
+Post-quantum, tamper-evident receipts for consequential agent actions, as an MCP server.
 
-> No Receipt. No Trust.
+Four tools, one shared signing primitive (the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`: Ed25519 + ML-DSA-65 + SLH-DSA):
 
-## What It Does
+| Tool | What it does |
+|---|---|
+| `mint_receipt_for_record_change` | Mints a post-quantum receipt for a CRM record change. Works with any CRM (open-core Relaticle, hosted CRMs via their own MCP, custom). Old/new values are SHA-256 hashes. |
+| `audit_my_agent_inventory` | Ranks a CALLER-PROVIDED list of MCP tools by worst-regret if they act. **Read-only.** Cannot auto-discover other servers -- MCP protocol does not allow that. |
+| `mint_action_receipt` | Post-quantum receipt for any consequential agent action. |
+| `verify_receipt` | Verify a receipt from the certificate alone -- offline, no DB. Defaults to PQ-required mode. |
 
-Trust Gate adds accountability to AI agent decisions. When your agent calls `gate_decision`, Trust Gate:
+## Quantum Hardening (pol.must_do.150 reference implementation)
 
-1. **Evaluates** the decision against OPA policies (allow/deny + risk score)
-2. **Signs** an Ed25519 cryptographic receipt (TrustAtom) if approved
-3. **Stores** the decision in an immutable Neo4j graph
-4. **Returns** proof that the decision was evaluated, authorized, and recorded
+* **H1** key persistence + bootstrap with FAIL-CLOSED kid-drift check
+* **H2** per-IP token-bucket rate limit (DoS-hardened: FIFO eviction + body cap)
+* **H3** PQ-required verify (defeats signature-stripping downgrade attacks)
+* **H4** 128-bit `kid` on every minted receipt (offline same-notary check)
+* Optional bearer-auth toggle + narrowed CORS via `TRUST_GATE_BEARER_TOKEN` + `TRUST_GATE_ALLOWED_ORIGINS`
+* 33/33 tests including adversarial PQ-strip + IP-rotation attack simulations
 
-Every receipt is cryptographically signed and independently verifiable. If an AI agent can't produce a receipt, you can't trust the decision.
+See [PUBLISH.md](./PUBLISH.md) for the full hardening status table.
 
-## Installation
-
-```bash
-# Using uv (recommended)
-uv pip install trust-gate-mcp
-
-# Using pip
-pip install trust-gate-mcp
-```
-
-## Configuration
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `TRUST_GATE_URL` | No | `https://cwn-trust-gate.onrender.com` | Trust Gate API base URL |
-| `TRUST_GATE_API_KEY` | Yes | — | Bearer token for authentication |
-| `TRUST_GATE_TENANT` | No | `default` | Default tenant ID |
-| `TRUST_GATE_TIMEOUT` | No | `30` | HTTP timeout in seconds |
-
-## Usage with Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "trust-gate": {
-      "command": "uvx",
-      "args": ["trust-gate-mcp"],
-      "env": {
-        "TRUST_GATE_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
-```
-
-## Usage with Claude Code
+## Local dev (stdio)
 
 ```bash
-claude mcp add trust-gate -- uvx trust-gate-mcp
+pip install mcp "openagentontology[pq]"
+python server.py
 ```
 
-## Available Tools
-
-### `gate_decision`
-
-Submit an AI decision for policy evaluation and cryptographic receipt minting.
-
-```
-action: "DEPLOY"
-agent_id: "my-deploy-agent"
-resource_id: "prod-server-01"
-env: "PRODUCTION"
-```
-
-Returns: allow/deny decision, risk score, and signed TrustAtom receipt.
-
-### `verify_receipt`
-
-Verify a TrustAtom receipt's Ed25519 signature. Purely mathematical verification — no trust in the server required.
-
-```
-evidence_hash: "a1b2c3..."
-signature: "base64-encoded-ed25519-signature"
-```
-
-Returns: valid (bool), public key, and reason.
-
-### `check_policy`
-
-Dry-run a policy evaluation without minting a receipt. Use for pre-flight checks.
-
-```
-action: "EXPORT_INTEGRATION"
-agent_id: "export-agent"
-resource_id: "customer-data"
-```
-
-Returns: allow/deny, risk score, classification. No state changes.
-
-### `health`
-
-Check Trust Gate connectivity and service status.
-
-Returns: service status, version, and environment details.
-
-## Action Types
-
-| Action | Risk Level | Receipt Required |
-|--------|-----------|-----------------|
-| `READ_EVIDENCE` | Low | No |
-| `GRAPH_READ` | Low | No |
-| `CODE_GENERATION` | Medium | No |
-| `GRAPH_WRITE` | Medium | Yes |
-| `EXPORT_INTEGRATION` | High | Yes |
-| `DEPLOY` | High | Yes |
-| `MODIFY_POLICY` | Critical | Yes + Human Approval |
-
-## Why This Exists
-
-If a foundation model can replicate your product in a single API call, you don't have a product. Trust Gate provides something models can't replicate: **cryptographic proof that decisions were evaluated, authorized, and recorded.**
-
-The receipts are temporally unique (signed at decision time), cryptographically bound (Ed25519), and relationally structured (linked in a decision graph). A model cannot retroactively generate this state.
-
-## Development
+## Container deploy (Smithery / any container host)
 
 ```bash
-cd mcp/trust-gate-server
-pip install -e ".[dev]"
-pytest
+docker build -t trust-gate-mcp .
+docker run -p 8081:8081 -v trust-gate-data:/data/oao trust-gate-mcp
 ```
+
+The volume mount on `/data/oao` is **required for production** -- without it the signing key rotates per restart and breaks long-running verification chains. The persistent `key_metadata.json` holds the notary's `kid`; the bootstrap step refuses to start if it drifts.
 
 ## License
 
-Apache-2.0 — Cyber Warrior Network
+Apache-2.0. Built on the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) primitive.

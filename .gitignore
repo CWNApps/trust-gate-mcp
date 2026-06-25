@@ -1,49 +1,9 @@
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-*.egg
-dist/
-build/
-.eggs/
-
-# Virtualenv
+*.pyc
+*.pyo
+.pytest_cache/
 .venv/
 venv/
-env/
-ENV/
-
-# pytest
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-
-# Type checking
-.mypy_cache/
-.pyre/
-.pytype/
-.ruff_cache/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+*.egg-info/
 .DS_Store
-
-# Environment
-.env
-.env.local
-*.env
-
-# Secrets (defense in depth — never commit these names)
-*.pem
-*.key
-*.crt
-secrets.json
-credentials.json
+data/

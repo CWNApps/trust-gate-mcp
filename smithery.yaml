@@ -1,76 +1,31 @@
-# Smithery MCP registry manifest — https://smithery.ai/docs/deployments
-# Published via: https://smithery.ai/new
-name: trust-gate-mcp
-version: 0.1.0
-displayName: Trust Gate
-description: Policy-gated AI decisions with Ed25519 cryptographic receipts. No receipt, no trust.
-license: Apache-2.0
-author: Cyber Warrior Network
-homepage: https://cwn-trust-gate.onrender.com
-repository: https://github.com/cyber-warrior-network/trust-gate-mcp
-keywords:
-  - trust
-  - ai-safety
-  - decision-trust
-  - trustatom
-  - ed25519
-  - opa
-  - policy
-  - audit
-  - compliance
-  - eu-ai-act
-
+# Smithery deployment config -- container runtime (language-agnostic Python path).
+# Reference (verified-or-ABSTAIN per AGENTS.md G5): the canonical schema reference page
+# (smithery.ai/docs/build/project-config/smithery.yaml) is client-rendered and could not be
+# fetched directly during research; runtime contract details below are confirmed by Smithery's
+# publish.md + container-deployment docs. Treat field names as best-known; verify with
+# `smithery validate` (or whatever the current CLI provides) before submission.
+runtime: container
 startCommand:
-  type: stdio
-  command: uvx
-  args:
-    - trust-gate-mcp
+  type: http
   configSchema:
     type: object
-    required:
-      - trustGateApiKey
+    title: Trust Gate MCP configuration
+    description: >-
+      Trust Gate exposes post-quantum-signed receipt tools. No secrets are required at the
+      gateway. The toggle below lets a deployer downgrade verification to Ed25519-only for
+      legacy receipts; production deployments should keep it enabled.
     properties:
-      trustGateApiKey:
-        type: string
-        title: Trust Gate API Key
-        description: Bearer token for the Trust Gate API. Get yours at https://cwn-trust-gate.onrender.com/pricing
-        format: password
-      trustGateUrl:
-        type: string
-        title: Trust Gate Base URL
-        description: Override the default Trust Gate API endpoint (advanced).
-        default: https://cwn-trust-gate.onrender.com
-      trustGateTenant:
-        type: string
-        title: Default Tenant ID
-        description: Tenant context for multi-tenant deployments.
-        default: default
-      trustGateTimeout:
-        type: integer
-        title: HTTP Timeout (seconds)
-        description: Timeout for Trust Gate API calls.
-        default: 30
-        minimum: 5
-        maximum: 120
+      require_pq:
+        type: boolean
+        title: Require post-quantum verification
+        description: >-
+          When true (default), verify_receipt FAILS if the ML-DSA-65 or SLH-DSA legs are
+          missing -- defends against signature-stripping downgrade attacks. Disable only
+          when verifying legacy Ed25519-only receipts.
+        default: true
+    required: []
   exampleConfig:
-    trustGateApiKey: tg_live_your_key_here
-
-tools:
-  - name: gate_decision
-    description: Submit an AI decision for OPA policy evaluation and Ed25519 receipt minting. Returns allow/deny, risk score, and signed TrustAtom receipt.
-    riskLevel: medium
-  - name: verify_receipt
-    description: Mathematically verify a TrustAtom receipt's Ed25519 signature. Zero server trust required.
-    riskLevel: low
-  - name: check_policy
-    description: Dry-run policy evaluation without minting a receipt. Use for pre-flight checks.
-    riskLevel: low
-  - name: health
-    description: Check Trust Gate connectivity and service status.
-    riskLevel: low
-
-categories:
-  - security
-  - ai-safety
-  - compliance
-  - developer-tools
+    require_pq: true
+build:
+  dockerfile: Dockerfile
+  dockerBuildPath: "."
