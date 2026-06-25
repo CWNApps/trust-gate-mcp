@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir \
         "uvicorn>=0.30" \
         "starlette>=0.37"
 
-COPY server.py server_http.py bootstrap.py rate_limit.py /app/
+COPY src/trust_gate_mcp/server.py src/trust_gate_mcp/server_http.py src/trust_gate_mcp/bootstrap.py src/trust_gate_mcp/rate_limit.py src/trust_gate_mcp/auth.py /app/
 
 # Persistent state directory for the Ed25519 + ML-DSA-65 + SLH-DSA signing keys
 # AND key_metadata.json. Mount a volume here at deploy time -- without it the key
