@@ -35,6 +35,13 @@ def main() -> None:
 
     mcp_server = build_server()
 
+    # FastMCP's streamable_http_app initializes its session-manager task group inside its
+    # OWN lifespan. If we wrap it under a NEW Starlette without forwarding the lifespan,
+    # the manager never starts and every request fails with
+    #   RuntimeError: Task group is not initialized. Make sure to use run().
+    # Forward it explicitly.
+    inner_mcp_app = mcp_server.streamable_http_app()
+
     # Static server card so a directory/scanner that cannot complete a Streamable HTTP
     # handshake (e.g. behind a strict redirect, behind an auth wall, etc.) can still
     # learn the server's identity + tool surface. Documented at
@@ -83,8 +90,9 @@ def main() -> None:
     app = Starlette(
         routes=[
             Route("/.well-known/mcp/server-card.json", server_card, methods=["GET"]),
-            Mount("/", app=mcp_server.streamable_http_app()),
+            Mount("/", app=inner_mcp_app),
         ],
+        lifespan=inner_mcp_app.router.lifespan_context,
         middleware=[
             # CORS first so preflight passes before any auth check sees it.
             Middleware(CORSMiddleware, allow_origins=allowed,
