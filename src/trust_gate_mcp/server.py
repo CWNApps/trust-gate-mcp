@@ -296,11 +296,22 @@ def tool_verify_receipt(receipt: Dict[str, Any],
 def build_server():
     """Build the FastMCP server with all four tools. Importable so tests don't need stdio."""
     from mcp.server.fastmcp import FastMCP  # imported lazily so tests can run without mcp
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    # FastMCP's DNS-rebinding protection defaults to ON with an empty allow-list, which
+    # rejects every request with 421 "Invalid Host header" behind a TLS-terminating proxy
+    # (Render, Smithery gateway, Cloudflare, etc.). We disable it here because:
+    #   - Trust Gate is reached only through a trusted upstream proxy
+    #   - CORS is already enforced separately (auth.py + server_http.py)
+    #   - bearer-auth, when enabled, provides per-request authentication
+    # Operators on a direct-exposure deploy should re-enable + populate allowed_hosts.
+    security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
     mcp = FastMCP("trust-gate", instructions=(
         "Trust Gate -- post-quantum, tamper-evident receipts for consequential agent actions. "
         "All receipts reuse the open-source OpenAgentOntology mint_receipt (Ed25519 + ML-DSA-65 + "
         "SLH-DSA). Verifiable offline from the receipt alone."
-    ))
+    ), transport_security=security)
 
     @mcp.tool(description="Mint a post-quantum receipt for one CRM record change. Old/new values "
               "are carried as SHA-256 hashes. Works with any CRM (Relaticle, hosted CRMs, custom).")
