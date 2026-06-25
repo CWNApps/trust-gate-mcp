@@ -1,38 +1,35 @@
 # Changelog
 
-All notable changes to `trust-gate-mcp` will be documented in this file.
+## 0.2.0 -- 2026-06-25
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+**Architecture change.** Trust Gate MCP evolves from a thin client of the hosted
+`cwn-trust-gate.onrender.com` backend into a SELF-CONTAINED MCP server that mints
+post-quantum receipts locally via the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology)
+primitive. No hosted backend dependency.
 
-## [0.1.0] — 2026-04-14
+### Tools (full set rewritten)
+- `mint_receipt_for_record_change(...)` -- tamper-evident per-change receipt for any CRM
+- `audit_my_agent_inventory(inventory)` -- worst-regret ranking of a CALLER-PROVIDED list (READ-ONLY)
+- `mint_action_receipt(...)` -- general-purpose consequential-action receipt
+- `verify_receipt(receipt)` -- offline verify from the certificate alone
 
-### Added
-- Initial public release.
-- Four MCP tools: `gate_decision`, `verify_receipt`, `check_policy`, `health`.
-- Stdio transport via `FastMCP`.
-- Async HTTP client with configurable base URL, API key, tenant, timeout.
-- Ed25519 receipt verification (mathematical, zero server-trust).
-- Bearer token authentication for Trust Gate API.
-- Full pytest coverage (21 tests).
-- Apache-2.0 license.
+The v0.1.0 tools (`gate_decision`, `check_policy`, `health`) are removed from the MCP
+surface. The `client.py` + `config.py` modules are kept under `src/trust_gate_mcp/` for
+callers that still want to talk to the hosted backend; `build_server()` does not use them.
 
-### Integrations
-- Claude Desktop (stdio via `uvx` or `pip install`).
-- Claude Code (`claude mcp add trust-gate -- uvx trust-gate-mcp`).
-- Any MCP-compatible client (Cursor, Zed, Windsurf, Cline, etc.).
+### Quantum Hardening (CWN pol.must_do.150 reference)
+- H1: persistent signing-key volume + bootstrap (FAIL-CLOSED on kid drift)
+- H2: per-IP token-bucket rate limit, DoS-hardened (FIFO eviction + body cap)
+- H3: PQ-required verify (defeats signature-stripping)
+- H4: 128-bit `kid` on every minted receipt (offline same-notary check)
 
-### Action Types Supported
-- `READ_EVIDENCE`, `GRAPH_READ` — low-risk, no receipt required
-- `CODE_GENERATION` — medium-risk
-- `GRAPH_WRITE`, `EXPORT_INTEGRATION`, `DEPLOY` — receipt required
-- `MODIFY_POLICY` — receipt + human approval required
+Optional bearer-auth toggle via `TRUST_GATE_BEARER_TOKEN`; CORS narrows to
+`TRUST_GATE_ALLOWED_ORIGINS` when bearer is on.
 
-### Trust Gate Platform
-- Backed by [cwn-trust-gate.onrender.com](https://cwn-trust-gate.onrender.com)
-- Ed25519 signing on cryptographic boundary
-- OPA policy evaluation
-- Neo4j immutable decision graph
-- TrustAtom receipt protocol
+33/33 hardened-server tests + adversarial PQ-strip and IP-rotation attack simulations.
 
-[0.1.0]: https://github.com/cyber-warrior-network/trust-gate-mcp/releases/tag/v0.1.0
+## 0.1.0 -- 2026-04-14
+
+Initial release. Thin MCP client of the hosted Trust Gate backend at
+`cwn-trust-gate.onrender.com`. Tools: `gate_decision`, `verify_receipt`,
+`check_policy`, `health`. Apache-2.0.
