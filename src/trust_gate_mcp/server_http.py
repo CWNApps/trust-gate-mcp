@@ -180,6 +180,122 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
     async def landing(_request):
         return HTMLResponse(LANDING_HTML)
 
+    # Friendly browser explainer for human-clicked /mcp URLs.
+    # Every Moltbook /agents post, every AgentOps comment, every Discord drop, every
+    # PyPI README links to https://trust-gate-mcp.onrender.com/mcp?via=<channel> as
+    # a verify endpoint. Humans (not MCP clients) will click those links and -- per
+    # MCP spec -- get a JSON-RPC 406 ("Not Acceptable: Client must accept
+    # text/event-stream") which looks like a crash. This middleware catches the
+    # browser case (GET /mcp with Accept: text/html and NOT Accept: text/event-stream)
+    # and serves a DDU-themed page explaining what an MCP endpoint is + a copy-paste
+    # curl example, so curious humans land somewhere useful instead of scary.
+    # Real MCP clients (Smithery scan, Claude Desktop, any /mcp POST) are untouched.
+    MCP_EXPLAINER_HTML = """<!doctype html>
+<meta charset="utf-8"><title>Trust Gate MCP endpoint</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--o:#FF4500;--c:#EFEBE2;--b:#0A0A0A;--p:#1a1a18;--ln:#26261f;--m:JetBrains Mono,monospace}
+*{box-sizing:border-box;margin:0}
+body{background:var(--b);color:var(--c);font-family:DM Sans,system-ui,sans-serif;line-height:1.55;padding:48px 24px;max-width:820px;margin:0 auto}
+h1{font-family:Archivo Black,sans-serif;font-size:clamp(30px,4.6vw,46px);line-height:1.04;margin-bottom:14px}
+h1 span{color:var(--o)}
+h2{font-family:Archivo Black,sans-serif;font-size:20px;margin:28px 0 10px}
+p{font-size:16px;color:#cfcbc2;margin-bottom:14px}
+.kick{font-family:var(--m);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--o);margin-bottom:18px}
+pre{background:var(--p);border:1px solid var(--ln);padding:14px 16px;font-family:var(--m);font-size:12.5px;color:var(--c);line-height:1.6;overflow-x:auto;white-space:pre;margin:8px 0 18px}
+pre .o{color:var(--o)}
+a{color:var(--c);text-decoration:none;border-bottom:1px solid var(--o);font-family:var(--m);font-size:13.5px}
+a:hover{color:var(--o)}
+.tag{display:inline-block;font-family:var(--m);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--o);padding:3px 10px;border:1px solid var(--o);margin:0 6px 6px 0}
+.btn{display:inline-block;margin-top:10px;padding:10px 18px;border:1px solid var(--o);font-family:var(--m);font-size:13px;letter-spacing:.05em;color:var(--o)}
+.btn:hover{background:var(--o);color:var(--b)}
+footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
+</style>
+<div class="kick">Cyber Warrior Network &middot; Trust Gate</div>
+<h1>This is an <span>MCP endpoint</span>, not a webpage.</h1>
+<p><span class="tag">Endpoint OK</span><span class="tag">Server healthy</span> If you got here from a Moltbook, AgentOps, or Discord link, you are in the right place &mdash; just the wrong format. MCP endpoints speak JSON-RPC over HTTP and require a specific <code>Accept</code> header. Your browser sent <code>text/html</code>; the server politely declined, exactly as the spec mandates.</p>
+
+<h2>Verify a Trust Gate receipt yourself (60 seconds, no install)</h2>
+<pre>curl -X POST <span class="o">https://trust-gate-mcp.onrender.com/mcp</span> \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
+
+<h2>Or mint a calling-card receipt</h2>
+<pre>curl -X POST <span class="o">https://trust-gate-mcp.onrender.com/mcp</span> \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":{"name":"mint_action_receipt","arguments":{
+         "agent_id":"anyone","operation":"hello","target":"world"}}}'</pre>
+
+<h2>Or use the framework adapter</h2>
+<pre>pip install cwn-langchain-trust-gate
+<span class="o"># or cwn-crewai-trust-gate / cwn-llama-index-trust-gate</span>
+
+from langchain_trust_gate import MintActionReceiptTool
+tool = MintActionReceiptTool()
+receipt = tool.invoke({
+    "agent_id": "ops-bot",
+    "operation": "approve_vendor_payment",
+    "target": "invoice-47000",
+})
+print(receipt["atom_id"])</pre>
+
+<p><a class="btn" href="/">&larr; Back to the landing page</a></p>
+
+<footer>Apache-2.0. Source: github.com/CWNApps/trust-gate-mcp. OAO primitive: github.com/CWNApps/openagentontology.</footer>
+"""
+
+    class MCPBrowserExplainerMiddleware:
+        """Catch human browser GETs on /mcp before the MCP transport 406s them.
+
+        Real MCP clients (Claude Desktop, Smithery scan, any JSON-RPC POST) send
+        `Accept: application/json, text/event-stream` or `Accept: text/event-stream`.
+        Browsers send `Accept: text/html, ...`. If we see a GET /mcp with text/html
+        and NOT text/event-stream, it is a human who clicked a verify-link from a
+        published post -- serve them the DDU explainer instead of the JSON-RPC 406.
+
+        Why a middleware and not a Route: a Route("/mcp", ...) would intercept ALL
+        GET /mcp, including legitimate SSE-stream opens from real MCP clients
+        (MCP uses GET to open server-initiated streams). The Accept-header check
+        is the only honest discriminator.
+        """
+        def __init__(self, app, html=MCP_EXPLAINER_HTML):
+            self.app = app
+            # Pre-encode once. immutable. avoids a per-request encode.
+            self.body = html.encode("utf-8")
+
+        async def __call__(self, scope, receive, send):
+            if (scope.get("type") == "http"
+                    and scope.get("method") == "GET"
+                    and scope.get("path") == "/mcp"):
+                accept_b = b""
+                for k, v in scope.get("headers", ()):
+                    if k == b"accept":
+                        accept_b = v
+                        break
+                accept = accept_b.decode("latin-1", "replace").lower()
+                # Only treat as a browser if it explicitly asks for HTML AND does
+                # NOT also accept text/event-stream (the SSE leg an MCP client
+                # uses). This is the narrow human-clicker case.
+                if "text/html" in accept and "text/event-stream" not in accept:
+                    await send({
+                        "type": "http.response.start",
+                        "status": 200,
+                        "headers": [
+                            (b"content-type", b"text/html; charset=utf-8"),
+                            # no-store so a content fix (e.g. wrong curl example) rolls
+                            # out instantly; Render edge will not serve stale HTML.
+                            (b"cache-control", b"no-store"),
+                            # MIME sniff protection on a static HTML response.
+                            (b"x-content-type-options", b"nosniff"),
+                        ],
+                    })
+                    await send({"type": "http.response.body", "body": self.body})
+                    return
+            await self.app(scope, receive, send)
+
     # CORS posture follows the bearer-auth toggle:
     #   bearer off  -> allow_origins=['*'] (verify-as-public-good adoption path)
     #   bearer on   -> allow_origins from TRUST_GATE_ALLOWED_ORIGINS (no '*' with credentials)
@@ -202,7 +318,14 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
         ],
         lifespan=inner_mcp_app.router.lifespan_context,
         middleware=[
-            # CORS first so preflight passes before any auth check sees it.
+            # Outermost: short-circuit human browser GETs on /mcp before any other
+            # middleware spends cycles on them. A real MCP client (Accept includes
+            # text/event-stream, or POST request) passes straight through to CORS.
+            # Putting this first means a human navigating to /mcp does NOT consume
+            # a token from the per-IP rate-limit bucket -- a 100% non-MCP visit
+            # should not count against an MCP client sharing the same IP.
+            Middleware(MCPBrowserExplainerMiddleware),
+            # CORS so preflight passes before any auth check sees it.
             Middleware(CORSMiddleware, allow_origins=allowed,
                        allow_methods=["*"], allow_headers=["*"], expose_headers=["*"],
                        allow_credentials=auth_on),
