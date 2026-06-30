@@ -22,6 +22,24 @@ Four tools, one shared signing primitive (the open-source [OpenAgentOntology](ht
 
 See [PUBLISH.md](./PUBLISH.md) for the full hardening status table.
 
+## Claude Tag compatibility
+
+Trust Gate MCP is a standards-compliant remote MCP server, live on the official
+MCP registry as `io.github.CWNApps/trust-gate-mcp`. Per Anthropic's public-beta
+documentation for Claude Tag (claude.com/docs/claude-tag/admins/connections/custom),
+an org's Primary Owner or Owner can attach a custom MCP server to a Slack channel's
+access bundle: a plugin containing an `.mcp.json` that points at the server URL,
+plus a separate credential (Bearer token) for the host added via "Connect another
+app" on the bundle's Credentials tab. Trust Gate MCP already exposes the URL, tool
+schemas, and bearer-auth surface that flow expects (`https://trust-gate-mcp.onrender.com/mcp`,
+`TRUST_GATE_BEARER_TOKEN`).
+
+**This is a readiness statement, not a verified integration.** We have not wired
+this into a real Claude Team/Enterprise org with Claude Tag enabled (that requires
+Owner-role access to someone else's workspace), so the end-to-end flow is
+unconfirmed by us. If you administer a Claude Tag-enabled org and want to try
+wiring Trust Gate in, or want help validating the flow together, open an issue.
+
 ## Local dev (stdio)
 
 ```bash
