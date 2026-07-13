@@ -13,6 +13,11 @@ primitive. No hosted backend dependency.
 - `mint_action_receipt(...)` -- general-purpose consequential-action receipt
 - `verify_receipt(receipt)` -- offline verify from the certificate alone
 
+### Sovereignty Tools (new)
+- `gate_decision(action, resource, context, phase)` -- two-phase PREVIEW->COMMIT decision gate; PREVIEW returns risk assessment + preview_id, COMMIT verifies inputs + mints receipt
+- `check_egress(destination, data_sample, provider)` -- egress data-sensitivity classification (PUBLIC/INTERNAL/CONFIDENTIAL/RESTRICTED); blocks RESTRICTED; receipt per classification
+- `run_exit_drill()` -- vendor exit readiness check (local signing, local model, local data export); informational + receipt
+
 The v0.1.0 tools (`gate_decision`, `check_policy`, `health`) are removed from the MCP
 surface. The `client.py` + `config.py` modules are kept under `src/trust_gate_mcp/` for
 callers that still want to talk to the hosted backend; `build_server()` does not use them.

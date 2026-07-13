@@ -1,6 +1,6 @@
 """Trust Gate MCP server -- post-quantum agent-decision receipts as MCP tools.
 
-One MCP server, four tools, one shared post-quantum primitive (the open-source
+One MCP server, seven tools, one shared post-quantum primitive (the open-source
 OpenAgentOntology `mint_receipt`: Ed25519 + ML-DSA-65 (FIPS 204) + SLH-DSA (FIPS 205)).
 
   mint_receipt_for_record_change(record)  -- a CRM record changed; mint a per-change receipt
@@ -9,6 +9,9 @@ OpenAgentOntology `mint_receipt`: Ed25519 + ML-DSA-65 (FIPS 204) + SLH-DSA (FIPS
                                              worst-regret if they act, with a signed receipt
   mint_action_receipt(action, decision)   -- general-purpose agent-action receipt
   verify_receipt(receipt)                 -- verify from the certificate alone (offline)
+  gate_decision(action, resource, ...)   -- two-phase PREVIEW->COMMIT decision gate with receipt
+  check_egress(destination, data_sample) -- egress data-classification check with receipt
+  run_exit_drill()                       -- vendor exit readiness check with receipt
 
 Honesty constraints (encoded, not optional):
 
@@ -29,6 +32,7 @@ Run:
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import sys
@@ -77,6 +81,38 @@ _TIER_MEDIUM = re.compile(
     r"book|schedule|reserve|charge)\b", re.I)
 _TIER_LOW = re.compile(
     r"\b(read|get|list|search|query|find|show|view|inspect|describe)\b", re.I)
+
+
+# ---- egress data-sensitivity classification (heuristic, for check_egress) ----------------
+_RESTRICTED_DATA = re.compile(
+    r"\b(ssn|social.?security|passport.?num|credit.?card|card.?number|"
+    r"bank.?account|routing.?number|iban|swift.?code|"
+    r"dea.?number|medical.?record|health.?record)\b", re.I)
+_CONFIDENTIAL_DATA = re.compile(
+    r"\b(password|secret|token|api.?key|private.?key|credential|"
+    r"bearer|session.?id|auth.?code|signing.?key)\b", re.I)
+_INTERNAL_DATA = re.compile(
+    r"\b(internal|draft|proprietary|trade.?secret|roadmap|unreleased|"
+    r"embargoed|pre.?release|nda|board.?minutes)\b", re.I)
+
+_EGRESS_RETENTION: Dict[str, str] = {
+    "PUBLIC": "no retention constraint",
+    "INTERNAL": "90-day minimum retention recommended",
+    "CONFIDENTIAL": "365-day retention, audit trail recommended",
+    "RESTRICTED": "no egress permitted; data must remain within the trust boundary",
+}
+
+
+def _classify_egress(data_sample: str, destination: str) -> tuple[str, str]:
+    """Classify data sensitivity based on content markers. Heuristic, not exhaustive."""
+    combined = f"{data_sample} {destination}"
+    if _RESTRICTED_DATA.search(combined):
+        return "RESTRICTED", "restricted-class markers detected (PII/financial/health identifiers)"
+    if _CONFIDENTIAL_DATA.search(combined):
+        return "CONFIDENTIAL", "confidential-class markers detected (credentials/keys/tokens)"
+    if _INTERNAL_DATA.search(combined):
+        return "INTERNAL", "internal-class markers detected (proprietary/draft/embargoed)"
+    return "PUBLIC", "no sensitive markers detected in sample"
 
 
 def _tier_for(label: str) -> tuple[str, int]:
@@ -291,10 +327,193 @@ def tool_verify_receipt(receipt: Dict[str, Any],
     return _verify(receipt, require_pq=require_pq)
 
 
+def tool_gate_decision(
+    action: str,
+    resource: str,
+    context: Dict[str, Any],
+    phase: str = "PREVIEW",
+    preview_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Two-phase decision gate: PREVIEW evaluates risk without acting; COMMIT mints a receipt.
+
+    Models the PREVIEW->COMMIT pattern: every consequential action gets a risk assessment
+    first (PREVIEW), and only proceeds when the caller explicitly commits with the
+    preview_id returned by the PREVIEW phase. This is a stateless check -- the preview_id
+    is deterministically derived from the inputs, so the same action+resource+context always
+    produces the same preview_id.
+
+    The receipt is tamper-evident, not proof of compliance.
+    """
+    if not action or not resource:
+        return {"error": "action and resource are required"}
+    phase_upper = phase.upper().strip()
+    if phase_upper not in ("PREVIEW", "COMMIT"):
+        return {"error": "phase must be 'PREVIEW' or 'COMMIT'"}
+
+    # Deterministic preview_id: sha256(action|resource|sha256(context_canonical))
+    ctx_canonical = json.dumps(context, sort_keys=True, default=str) if context else ""
+    ctx_hash = hashlib.sha256(ctx_canonical.encode()).hexdigest()
+    preview_payload = f"{action}|{resource}|{ctx_hash}"
+    expected_id = "pvw_" + hashlib.sha256(preview_payload.encode()).hexdigest()[:24]
+
+    # Risk assessment (same verb-tier heuristic as audit_my_agent_inventory)
+    tier, score = _tier_for(f"{action} {resource}")
+
+    if phase_upper == "PREVIEW":
+        return {
+            "phase": "PREVIEW",
+            "preview_id": expected_id,
+            "action": action,
+            "resource": resource,
+            "risk_assessment": {
+                "tier": tier,
+                "worst_regret_score": score,
+                "method": "verb-tier heuristic (same basis as audit_my_agent_inventory); not a proof",
+            },
+            "policy_evaluation": {
+                "action_hash": _ascii_hash(action),
+                "resource_hash": _ascii_hash(resource),
+                "context_hash": _ascii_hash(str(context)),
+            },
+            "next_step": "pass this preview_id to phase='COMMIT' with the same action, resource, and context to proceed",
+        }
+
+    # COMMIT phase -- verify preview_id matches
+    if not preview_id:
+        return {"error": "preview_id is required for COMMIT phase (run PREVIEW first)"}
+    if preview_id != expected_id:
+        return {"error": "preview_id mismatch -- inputs changed since PREVIEW, or wrong preview_id"}
+
+    manifest = {
+        "operation": "decision_gate_commit",
+        "action": action,
+        "resource": resource,
+        "context_hash": _ascii_hash(str(context)),
+        "preview_id": expected_id,
+        "risk_tier": tier,
+        "risk_score": score,
+        "policy": "two-phase decision gate: PREVIEW evaluated, COMMIT executed",
+    }
+    receipt = _mint(manifest, decision="DECISION_COMMITTED")
+    return {
+        "phase": "COMMIT",
+        "preview_id": expected_id,
+        "permit": "GRANTED",
+        "risk_tier": tier,
+        "receipt": receipt,
+        "note": "receipt is tamper-evident, not proof of compliance",
+    }
+
+
+def tool_check_egress(
+    destination: str,
+    data_sample: str,
+    provider: str,
+) -> Dict[str, Any]:
+    """Classify outbound data sensitivity and gate egress.
+
+    Scans the data_sample for sensitivity markers (heuristic, not exhaustive) and
+    classifies as PUBLIC / INTERNAL / CONFIDENTIAL / RESTRICTED. RESTRICTED-class data
+    is blocked -- the response includes the classification but no egress permit.
+
+    The receipt is tamper-evident, not proof of compliance. The classification is a
+    heuristic signal, not a regulatory determination.
+    """
+    if not destination or not data_sample or not provider:
+        return {"error": "destination, data_sample, and provider are required"}
+
+    classification, reason = _classify_egress(data_sample, destination)
+    blocked = classification == "RESTRICTED"
+    retention = _EGRESS_RETENTION.get(classification, "unknown")
+
+    manifest = {
+        "operation": "egress_classification",
+        "destination_hash": _ascii_hash(destination),
+        "data_sample_hash": _ascii_hash(data_sample),
+        "provider": str(provider),
+        "classification": classification,
+        "blocked": blocked,
+        "policy": "egress data-sensitivity gate",
+    }
+    receipt = _mint(manifest, decision="EGRESS_BLOCKED" if blocked else "EGRESS_CLASSIFIED")
+
+    return {
+        "classification": classification,
+        "reason": reason,
+        "blocked": blocked,
+        "retention": retention,
+        "provider": provider,
+        "destination_hash": _ascii_hash(destination),
+        "receipt": receipt,
+        "note": "classification is heuristic, not a regulatory determination; receipt is tamper-evident, not proof of compliance",
+    }
+
+
+def tool_run_exit_drill() -> Dict[str, Any]:
+    """Check vendor exit readiness: local signing, local model access, local data export.
+
+    Informational -- shows the operator their sovereignty posture. Each check reports
+    PASS, FAIL, or UNKNOWN. The receipt covers the drill itself (tamper-evident, not
+    proof of compliance).
+    """
+    steps: List[Dict[str, Any]] = []
+
+    # 1. Local signing key (OAO receipt minting)
+    signing_ok = _oao_receipt is not None
+    steps.append({
+        "check": "local_signing_key",
+        "description": "OpenAgentOntology receipt signing available locally",
+        "status": "PASS" if signing_ok else "FAIL",
+        "detail": (f"source: {_OAO_SOURCE}"
+                   if signing_ok
+                   else "pip install 'openagentontology[pq]' to enable local signing"),
+    })
+
+    # 2. Local model access (Ollama or compatible)
+    ollama_host = os.environ.get("OLLAMA_HOST") or os.environ.get("OLLAMA_BASE_URL")
+    steps.append({
+        "check": "local_model_access",
+        "description": "Local LLM inference available (Ollama or compatible)",
+        "status": "PASS" if ollama_host else "UNKNOWN",
+        "detail": (f"OLLAMA_HOST={ollama_host}"
+                   if ollama_host
+                   else "OLLAMA_HOST not set; Ollama may still be reachable at default localhost:11434"),
+    })
+
+    # 3. Local data export
+    steps.append({
+        "check": "local_data_export",
+        "description": "Receipts and data exportable to local filesystem",
+        "status": "PASS",
+        "detail": "MCP server runs locally; all minted receipts are returned inline and can be persisted without network dependency",
+    })
+
+    passed = sum(1 for s in steps if s["status"] == "PASS")
+    total = len(steps)
+
+    manifest = {
+        "operation": "vendor_exit_drill",
+        "checks_passed": passed,
+        "checks_total": total,
+        "steps_summary": [{"check": s["check"], "status": s["status"]} for s in steps],
+        "policy": "vendor exit readiness assessment",
+    }
+    receipt = _mint(manifest, decision="EXIT_DRILL_COMPLETED")
+
+    return {
+        "readiness": "READY" if passed == total else "PARTIAL",
+        "passed": passed,
+        "total": total,
+        "steps": steps,
+        "receipt": receipt,
+        "note": "informational assessment; receipt is tamper-evident, not proof of compliance",
+    }
+
+
 # ---- MCP server wiring (FastMCP -- the high-level API in the modelcontextprotocol Python SDK) -
 
 def build_server():
-    """Build the FastMCP server with all four tools. Importable so tests don't need stdio."""
+    """Build the FastMCP server with all seven tools. Importable so tests don't need stdio."""
     from mcp.server.fastmcp import FastMCP  # imported lazily so tests can run without mcp
     from mcp.server.transport_security import TransportSecuritySettings
 
@@ -316,7 +535,7 @@ def build_server():
         # Required for one-shot directory scanners (e.g. Smithery) that POST a JSON-RPC
         # call and wait for a JSON body, not an open SSE stream.
         # stateless_http: every request handled independently, no mcp-session-id
-        # continuation needed. Safe for this tool surface -- none of the four tools share
+        # continuation needed. Safe for this tool surface -- none of the seven tools share
         # state across calls; each mint/verify is self-contained.
         json_response=True, stateless_http=True)
 
@@ -356,6 +575,32 @@ def build_server():
     def verify_receipt(receipt: Dict[str, Any],
                        require_pq: Optional[bool] = None) -> Dict[str, Any]:
         return tool_verify_receipt(receipt, require_pq)
+
+    @mcp.tool(description="Two-phase decision gate. PREVIEW phase returns a risk assessment and "
+              "preview_id without acting. COMMIT phase requires that preview_id back, verifies "
+              "inputs match, mints a tamper-evident receipt, and returns an execution permit. "
+              "Stateless -- the preview_id is deterministically derived from the inputs.")
+    def gate_decision(
+        action: str, resource: str, context: Dict[str, Any],
+        phase: str = "PREVIEW",
+        preview_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return tool_gate_decision(action, resource, context, phase, preview_id)
+
+    @mcp.tool(description="Egress classification check. Scans a data sample for sensitivity "
+              "markers (heuristic) and classifies as PUBLIC / INTERNAL / CONFIDENTIAL / "
+              "RESTRICTED. Blocks RESTRICTED-class egress. Returns classification, retention "
+              "info, and a tamper-evident receipt.")
+    def check_egress(
+        destination: str, data_sample: str, provider: str,
+    ) -> Dict[str, Any]:
+        return tool_check_egress(destination, data_sample, provider)
+
+    @mcp.tool(description="Vendor exit readiness drill. Checks local signing key, local model "
+              "access (Ollama), and local data export capability. Returns step-by-step results "
+              "and a tamper-evident receipt. Informational -- no side effects.")
+    def run_exit_drill() -> Dict[str, Any]:
+        return tool_run_exit_drill()
 
     return mcp
 

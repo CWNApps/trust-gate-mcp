@@ -2,7 +2,7 @@
 
 Post-quantum, tamper-evident receipts for consequential agent actions, as an MCP server.
 
-Four tools, one shared signing primitive (the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`: Ed25519 + ML-DSA-65 + SLH-DSA):
+Seven tools, one shared signing primitive (the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`: Ed25519 + ML-DSA-65 + SLH-DSA):
 
 | Tool | What it does |
 |---|---|
@@ -10,6 +10,9 @@ Four tools, one shared signing primitive (the open-source [OpenAgentOntology](ht
 | `audit_my_agent_inventory` | Ranks a CALLER-PROVIDED list of MCP tools by worst-regret if they act. **Read-only.** Cannot auto-discover other servers -- MCP protocol does not allow that. |
 | `mint_action_receipt` | Post-quantum receipt for any consequential agent action. |
 | `verify_receipt` | Verify a receipt from the certificate alone -- offline, no DB. Defaults to PQ-required mode. |
+| `gate_decision` | Two-phase decision gate. PREVIEW returns risk assessment + preview_id without acting. COMMIT verifies inputs match and mints a tamper-evident receipt with execution permit. |
+| `check_egress` | Egress classification. Scans data for sensitivity markers and classifies as PUBLIC / INTERNAL / CONFIDENTIAL / RESTRICTED. Blocks RESTRICTED. Returns classification + retention info + receipt. |
+| `run_exit_drill` | Vendor exit readiness drill. Checks local signing key, local model access (Ollama), and local data export. Returns step-by-step results + receipt. Informational, no side effects. |
 
 ## Quantum Hardening (pol.must_do.150 reference implementation)
 
