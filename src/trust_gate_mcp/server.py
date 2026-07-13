@@ -159,6 +159,14 @@ def _mint(manifest: Dict[str, Any], decision: str) -> Dict[str, Any]:
     return receipt
 
 
+_ATTESTATION_ALLOW = re.compile(r"^[A-Za-z0-9._\-/]{1,80}$")
+
+
+def _safe_attestation(val: str) -> str:
+    """Allowlist attestation field values: [A-Za-z0-9._-/] max 80 chars. Returns empty on reject."""
+    return val if _ATTESTATION_ALLOW.match(val) else ""
+
+
 def _require_pq_default() -> bool:
     """Env switch (default ON). Accepts BOTH `TRUST_GATE_REQUIRE_PQ` and `OAO_REQUIRE_PQ`
     so one env var configures every CWN distribution artifact (this server, the SalesGPT
@@ -299,8 +307,16 @@ def tool_mint_action_receipt(
     policy: str = "agent action evidence",
     inputs: Optional[str] = None,
     decision: str = "ACTION_GOVERNED",
+    triggered_by_type: Optional[str] = None,
+    triggered_by_source: Optional[str] = None,
+    decision_model: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Mint a post-quantum receipt for an arbitrary consequential agent action."""
+    """Mint a post-quantum receipt for an arbitrary consequential agent action.
+
+    Optional attestation provenance fields (triggered_by_type, triggered_by_source,
+    decision_model) are included in the manifest and signed into the receipt when
+    provided. These fields are allowlisted to [A-Za-z0-9._-/] max 80 chars.
+    """
     if not agent_id or not operation or not target:
         return {"error": "agent_id, operation, and target are required"}
     manifest = {
@@ -310,6 +326,13 @@ def tool_mint_action_receipt(
         "policy": str(policy),
         "inputs_hash": _ascii_hash(inputs or ""),
     }
+    for key, val in [("triggered_by_type", triggered_by_type),
+                     ("triggered_by_source", triggered_by_source),
+                     ("decision_model", decision_model)]:
+        if val is not None:
+            safe = _safe_attestation(str(val))
+            if safe:
+                manifest[key] = safe
     return _mint(manifest, decision=decision)
 
 
@@ -333,6 +356,9 @@ def tool_gate_decision(
     context: Dict[str, Any],
     phase: str = "PREVIEW",
     preview_id: Optional[str] = None,
+    triggered_by_type: Optional[str] = None,
+    triggered_by_source: Optional[str] = None,
+    decision_model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Two-phase decision gate: PREVIEW evaluates risk without acting; COMMIT mints a receipt.
 
@@ -394,6 +420,13 @@ def tool_gate_decision(
         "risk_score": score,
         "policy": "two-phase decision gate: PREVIEW evaluated, COMMIT executed",
     }
+    for key, val in [("triggered_by_type", triggered_by_type),
+                     ("triggered_by_source", triggered_by_source),
+                     ("decision_model", decision_model)]:
+        if val is not None:
+            safe = _safe_attestation(str(val))
+            if safe:
+                manifest[key] = safe
     receipt = _mint(manifest, decision="DECISION_COMMITTED")
     return {
         "phase": "COMMIT",
@@ -560,14 +593,21 @@ def build_server():
     ) -> Dict[str, Any]:
         return tool_audit_my_agent_inventory(inventory, notes)
 
-    @mcp.tool(description="Mint a post-quantum receipt for an arbitrary consequential agent action.")
+    @mcp.tool(description="Mint a post-quantum receipt for an arbitrary consequential agent action. "
+              "Optional attestation: triggered_by_type (human/agent/script), triggered_by_source "
+              "(api/cli/cron), decision_model (the LLM model used). Allowlisted to safe chars.")
     def mint_action_receipt(
         agent_id: str, operation: str, target: str,
         policy: str = "agent action evidence",
         inputs: Optional[str] = None,
         decision: str = "ACTION_GOVERNED",
+        triggered_by_type: Optional[str] = None,
+        triggered_by_source: Optional[str] = None,
+        decision_model: Optional[str] = None,
     ) -> Dict[str, Any]:
-        return tool_mint_action_receipt(agent_id, operation, target, policy, inputs, decision)
+        return tool_mint_action_receipt(
+            agent_id, operation, target, policy, inputs, decision,
+            triggered_by_type, triggered_by_source, decision_model)
 
     @mcp.tool(description="Verify a Trust Gate receipt from the certificate alone (offline). "
               "require_pq=True (default via OAO_REQUIRE_PQ) FAILS if the ML-DSA-65 or SLH-DSA "
@@ -579,13 +619,18 @@ def build_server():
     @mcp.tool(description="Two-phase decision gate. PREVIEW phase returns a risk assessment and "
               "preview_id without acting. COMMIT phase requires that preview_id back, verifies "
               "inputs match, mints a tamper-evident receipt, and returns an execution permit. "
-              "Stateless -- the preview_id is deterministically derived from the inputs.")
+              "Stateless. Optional attestation: triggered_by_type, triggered_by_source, decision_model.")
     def gate_decision(
         action: str, resource: str, context: Dict[str, Any],
         phase: str = "PREVIEW",
         preview_id: Optional[str] = None,
+        triggered_by_type: Optional[str] = None,
+        triggered_by_source: Optional[str] = None,
+        decision_model: Optional[str] = None,
     ) -> Dict[str, Any]:
-        return tool_gate_decision(action, resource, context, phase, preview_id)
+        return tool_gate_decision(
+            action, resource, context, phase, preview_id,
+            triggered_by_type, triggered_by_source, decision_model)
 
     @mcp.tool(description="Egress classification check. Scans a data sample for sensitivity "
               "markers (heuristic) and classifies as PUBLIC / INTERNAL / CONFIDENTIAL / "
