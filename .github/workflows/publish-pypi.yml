@@ -1,23 +1,110 @@
 name: Publish to PyPI
 
+# Trusted Publishing via OIDC. No PYPI_API_TOKEN secret needed.
+# PyPI must be configured with a publisher matching:
+#   owner       = CWNApps
+#   repository  = trust-gate-mcp
+#   workflow    = publish-pypi.yml
+#   environment = pypi
+#
+# NOTE: the live PyPI project `trust-gate-mcp` was first published from the
+# Cyber-Warrior-Network org, so the publisher record may still point there. If a
+# run fails the OIDC exchange rather than failing to resolve actions, that
+# mismatch is why.
+#
+# All third-party actions pinned to full SHA per pol.ops.security_pipeline. The
+# pypi-publish pin below is the same one the three framework-wrapper repos use
+# and is verified working -- the previous pin (76f52bc...) was not a real commit
+# in pypa/gh-action-pypi-publish, so every run died at "Prepare all required
+# actions" before reaching PyPI at all. Verify a pin resolves before trusting it:
+#   gh api repos/pypa/gh-action-pypi-publish/commits/<sha> --jq .sha
+
 on:
   release:
     types: [published]
 
-permissions:
-  id-token: write
+# Deny everything at the workflow level; each job re-grants the minimum it needs.
+permissions: {}
+
+concurrency:
+  group: pypi-publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  test:
+    name: Test before publishing
     runs-on: ubuntu-latest
+    # A PyPI version can never be replaced, only yanked, so the suite gates the
+    # build. This repo shipped for a month with an uncollectable suite because
+    # nothing ever ran it in CI -- that is exactly what this job prevents.
+    if: github.repository_owner == 'CWNApps'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: Install package + dev extras
+        run: python -m pip install -e ".[dev]" starlette
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  build:
+    name: Build distribution
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'CWNApps'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling (pinned)
+        # Pinned to defend against a malicious release of `build` itself
+        # injecting code into the wheel during `python -m build`.
+        run: python -m pip install 'build==1.2.2'
+
+      - name: Build wheel + sdist
+        run: python -m build
+
+      - name: Show built artifacts
+        run: ls -la dist/
+
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI via Trusted Publishing (OIDC)
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'CWNApps'
     environment:
       name: pypi
       url: https://pypi.org/p/trust-gate-mcp
+    permissions:
+      id-token: write   # required to mint the OIDC token PyPI exchanges
+      contents: read
+
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
         with:
-          python-version: "3.12"
-      - run: pip install build
-      - run: python -m build
-      - uses: pypa/gh-action-pypi-publish@76f52bc884231f62b54027e44d48159f4284357d
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
+        # No `password` -- the OIDC token is minted automatically based on the
+        # Trusted Publisher record. Sigstore attestations go to the Rekor public
+        # transparency log; non-fatal if Rekor is unreachable.
+        with:
+          attestations: true
