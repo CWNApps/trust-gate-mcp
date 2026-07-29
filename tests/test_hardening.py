@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-import server as srv
-from bootstrap import _kid_for_pubkey_b64, ensure_keys_and_metadata
-from rate_limit import RateLimitMiddleware, TokenBucket
+from trust_gate_mcp import server as srv
+from trust_gate_mcp.bootstrap import _kid_for_pubkey_b64, ensure_keys_and_metadata
+from trust_gate_mcp.rate_limit import RateLimitMiddleware, TokenBucket
 
 _HAS_OAO = srv._oao_receipt is not None
 

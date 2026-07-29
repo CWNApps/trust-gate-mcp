@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "trust-gate-mcp"
 version = "0.2.1"
-description = "MCP server for Trust Gate — policy-gated AI decisions with Ed25519 cryptographic receipts + attestation provenance"
+description = "MCP server for Trust Gate — post-quantum, tamper-evident receipts for agent actions. Ed25519 + ML-DSA-65 (FIPS 204), plus SLH-DSA (FIPS 205) when liboqs is installed. Offline verify."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
-keywords = ["mcp", "trust", "ai-safety", "decision-trust", "trustatom", "ed25519"]
+keywords = ["mcp", "trust", "ai-safety", "decision-trust", "trustatom", "ed25519", "ml-dsa", "slh-dsa", "post-quantum", "fips-204", "fips-205"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -22,8 +22,19 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "mcp>=1.7.0",
+    # Upper bound is load-bearing, not caution: mcp 2.0 REMOVED mcp.server.fastmcp
+    # (it became mcp.server.mcpserver), which is the only thing build_server() imports.
+    # With a bare >=1.7.0 a fresh install resolves to 2.x and the server cannot start
+    # at all. Lift this only together with migrating build_server() to the 2.x API.
+    "mcp>=1.7.0,<2",
     "httpx>=0.27.0",
+    # The signing primitive every mint/verify tool funnels through. Was previously
+    # undeclared, which made a plain `pip install trust-gate-mcp` install a server
+    # whose minting tools all returned "openagentontology_unavailable". The [pq]
+    # extra is pure-Python (dilithium-py) -- no native toolchain needed -- and gets
+    # the ML-DSA-65 leg, without which PQ-required verify (the default) refuses
+    # every signed receipt.
+    "openagentontology[pq]>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -31,11 +42,19 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
 ]
+# Adds the SLH-DSA (FIPS 205) hash-based third leg via liboqs. Kept optional on
+# purpose: liboqs is a NATIVE dependency, so forcing it would break pure-Python
+# installs. Without it the server signs Ed25519 + ML-DSA-65, which still satisfies
+# PQ-required mode ("at least one PQ leg").
+slh = [
+    "liboqs-python>=0.10",
+]
 
 [project.urls]
 Homepage = "https://cwn-trust-gate.onrender.com"
-Repository = "https://github.com/cyber-warrior-network/trust-gate-mcp"
-Issues = "https://github.com/cyber-warrior-network/trust-gate-mcp/issues"
+Repository = "https://github.com/CWNApps/trust-gate-mcp"
+Issues = "https://github.com/CWNApps/trust-gate-mcp/issues"
+Changelog = "https://github.com/CWNApps/trust-gate-mcp/blob/main/CHANGELOG.md"
 
 [project.scripts]
 trust-gate-mcp = "trust_gate_mcp.server:main"

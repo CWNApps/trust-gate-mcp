@@ -18,7 +18,7 @@ import pytest
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from auth import BearerAuthMiddleware, _allowed_origins, auth_active
+from trust_gate_mcp.auth import BearerAuthMiddleware, _allowed_origins, auth_active
 
 
 def _request(method: str = "POST", auth_header: str = "") -> Request:
