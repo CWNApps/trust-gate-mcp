@@ -2,7 +2,18 @@
 
 Post-quantum, tamper-evident receipts for consequential agent actions, as an MCP server.
 
-Seven tools, one shared signing primitive (the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`: Ed25519 + ML-DSA-65 + SLH-DSA):
+Seven tools, one shared signing primitive: the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`.
+
+**What actually gets signed depends on what you install** -- OAO detects its backend at import time, so this is worth stating plainly rather than advertising the best case:
+
+| Install | Legs | Notes |
+|---|---|---|
+| `pip install trust-gate-mcp` | Ed25519 + ML-DSA-65 (FIPS 204) | Default. Pure Python (`dilithium-py`), no native toolchain. Satisfies PQ-required mode. |
+| `pip install "trust-gate-mcp[slh]"` | Ed25519 + ML-DSA-65 + SLH-DSA (FIPS 205) | Adds the hash-based diversity leg via `liboqs`, which survives a lattice break. Native dependency. |
+
+PQ-required verify (the default) demands **at least one** verified post-quantum leg, so the
+dual-leg default is a real post-quantum posture, not a downgrade -- but only the `[slh]` install
+gives you the hash-based third leg.
 
 | Tool | What it does |
 |---|---|
@@ -25,12 +36,15 @@ Seven tools, one shared signing primitive (the open-source [OpenAgentOntology](h
 
 See [PUBLISH.md](./PUBLISH.md) for the full hardening status table.
 
-## Local dev (stdio)
+## Install (stdio)
 
 ```bash
-pip install mcp "openagentontology[pq]"
-python server.py
+pip install trust-gate-mcp
+trust-gate-mcp
 ```
+
+Add `[slh]` for the hash-based third leg. From a checkout, `pip install -e ".[dev]"` then
+`python -m trust_gate_mcp`.
 
 ## Container deploy (Smithery / any container host)
 

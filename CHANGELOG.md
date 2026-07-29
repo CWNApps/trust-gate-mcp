@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.1 -- 2026-07-13
+
+**Attestation provenance.** `mint_action_receipt` and `gate_decision` now accept three
+optional fields that answer "who/what set this action in motion" and get signed into the
+receipt manifest when supplied:
+
+- `triggered_by_type` -- human / agent / script
+- `triggered_by_source` -- api / cli / cron
+- `decision_model` -- the LLM model behind the decision
+
+Values are allowlisted to `[A-Za-z0-9._-/]`, max 80 chars, and silently dropped if they
+fail the check -- a PII guard, so a free-text field can never smuggle personal data into
+a signed, immutable receipt. Omitting the fields leaves the manifest exactly as in 0.2.0,
+so existing receipts and verifiers are unaffected.
+
+Also adds the GitHub Actions Trusted Publishing workflow (`publish-pypi.yml`) that
+releases this package to PyPI on `release: published`.
+
 ## 0.2.0 -- 2026-06-25
 
 **Architecture change.** Trust Gate MCP evolves from a thin client of the hosted

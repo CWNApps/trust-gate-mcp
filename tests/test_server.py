@@ -17,11 +17,22 @@ import copy
 
 import pytest
 
-import server as srv
+from trust_gate_mcp import server as srv
 
 
 # the OAO receipt path must resolve (either installed or via the repo fallback in server.py)
 _HAS_OAO = srv._oao_receipt is not None
+
+# OAO picks its PQ backend at import time and the two tiers sign DIFFERENT leg sets:
+#   liboqs       -> Ed25519 + ML-DSA-65 + SLH-DSA  (triple)
+#   dilithium_py -> Ed25519 + ML-DSA-65            (dual; what `openagentontology[pq]` installs)
+# Asserting the SLH-DSA leg unconditionally made this suite fail on the DEFAULT documented
+# install and pass only where liboqs happened to be present -- i.e. the green run was an
+# artifact of one machine's extras, not a property of the package. Detect the tier instead.
+try:
+    from openagentontology.pqsign import SLH_DSA_AVAILABLE as _HAS_SLH
+except Exception:  # pragma: no cover - OAO absent entirely; _HAS_OAO already gates those tests
+    _HAS_SLH = False
 
 
 # ---- mint_receipt_for_record_change --------------------------------------------------
@@ -33,10 +44,13 @@ def test_record_change_mints_pq_receipt_and_verifies():
         changed_by_agent="relaticle-ai@tenant",
     )
     assert "error" not in r
-    # the post-quantum legs must be present (PQ by default)
+    # Ed25519 + ML-DSA-65 are guaranteed on every supported install; SLH-DSA only when
+    # the liboqs backend is present. PQ-required verify needs at least one PQ leg, so the
+    # dual-leg tier is still a genuine post-quantum posture -- see _HAS_SLH above.
     assert r.get("signature_b64"), "missing Ed25519 leg"
     assert r.get("ml_dsa_signature_b64"), "missing ML-DSA-65 leg"
-    assert r.get("slh_dsa_signature_b64"), "missing SLH-DSA leg"
+    if _HAS_SLH:
+        assert r.get("slh_dsa_signature_b64"), "liboqs backend present but SLH-DSA leg missing"
     v = srv.tool_verify_receipt(r)
     assert v["ok"] is True
 
