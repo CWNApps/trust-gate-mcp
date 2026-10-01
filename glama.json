@@ -2,8 +2,8 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "trust-gate-mcp",
   "displayName": "Trust Gate",
-  "version": "0.2.1",
-  "description": "Post-quantum, tamper-evident receipts for consequential agent actions. Every gated decision produces a receipt you can verify offline, from the certificate alone — no server to trust, no database to query.",
+  "version": "0.3.0",
+  "description": "Tamper-evident receipts for consequential agent actions, plus a two-phase gate that returns ALLOW, DENY or ESCALATE from a read-only allowlist and signs the verdict. Integrity is verifiable offline from the certificate alone; pin the Ed25519 key id to check who signed.",
   "author": {
     "name": "Cyber Warrior Network",
     "url": "https://cwn-trust-gate.onrender.com"
@@ -21,19 +21,14 @@
     "trustatom",
     "ed25519",
     "ml-dsa",
-    "slh-dsa",
     "post-quantum",
     "fips-204",
-    "fips-205",
     "audit",
-    "compliance",
-    "eu-ai-act",
     "ai-governance"
   ],
   "categories": [
     "security",
     "ai-safety",
-    "compliance",
     "developer-tools"
   ],
   "runtime": {
@@ -51,12 +46,12 @@
     "required": [],
     "env": {
       "OAO_RECEIPT_KEY": {
-        "description": "Path to the persistent Ed25519 signing key. Strongly recommended in production: without a stable path the key is regenerated per restart, which breaks verification of every previously minted receipt. Bootstrap refuses to start if the key's kid drifts.",
+        "description": "Path to the persistent Ed25519 signing key (the stdio default keeps one under ~/.openagentontology). In a container, mount a volume here: without one the key changes on every restart, so receipts signed earlier still verify from their own certificate but a pinned kid stops matching new ones.",
         "default": "~/.openagentontology/receipt_ed25519.pem",
         "optional": true
       },
       "TRUST_GATE_REQUIRE_PQ": {
-        "description": "Require at least one verified post-quantum signature leg on verify. Default ON — defeats signature-stripping downgrade attacks. Set false only to verify legacy Ed25519-only receipts.",
+        "description": "Require at least one verified post-quantum signature on verify. Default ON. Only 0, false, no or off turn it off. It shows a post-quantum signature is present and valid, not whose key made it. OAO_REQUIRE_PQ is read when this one is empty.",
         "default": "true",
         "optional": true
       },
@@ -66,12 +61,20 @@
         "optional": true
       },
       "TRUST_GATE_ALLOWED_ORIGINS": {
-        "description": "Comma-separated CORS allowlist for the HTTP transport. Never use a wildcard.",
+        "description": "Comma-separated CORS allowlist for the HTTP transport. Applies only when TRUST_GATE_BEARER_TOKEN is set; without a token the transport allows any origin.",
         "optional": true
       },
       "PORT": {
         "description": "Port for the HTTP transport.",
         "default": "8081",
+        "optional": true
+      },
+      "TRUST_GATE_CHANNELS": {
+        "description": "Extra ?via= labels the HTTP attribution counter records (comma separated). Optional.",
+        "optional": true
+      },
+      "TRUST_GATE_FORWARDED_ALLOW_IPS": {
+        "description": "Proxy addresses whose X-Forwarded-For header is trusted for rate limiting. Set it to your proxy; the default trusts any, so clients can choose their own identity.",
         "optional": true
       }
     }
@@ -79,19 +82,22 @@
   "tools": [
     {
       "name": "mint_receipt_for_record_change",
-      "description": "Mint a post-quantum receipt for one CRM record change. Old/new values are SHA-256 hashed, never stored in the clear.",
+      "description": "Mint a receipt for one CRM record change. Old and new values are SHA-256 hashed (unsalted, so a low-entropy value can be guessed from its hash).",
       "riskLevel": "low",
       "arguments": {
-        "record_type": "The kind of record changed (e.g. contact, deal)",
         "record_id": "Identifier of the changed record",
+        "object_type": "The kind of record changed (e.g. contact, deal)",
         "field": "Field that changed",
         "old_value": "Previous value (hashed before signing)",
-        "new_value": "New value (hashed before signing)"
+        "new_value": "New value (hashed before signing)",
+        "changed_by_agent": "The agent that made the change",
+        "tenant": "Optional tenant label",
+        "policy": "Optional policy label"
       }
     },
     {
       "name": "audit_my_agent_inventory",
-      "description": "Rank a CALLER-PROVIDED list of MCP tools by worst-regret if they act. Read-only: mints no receipt. Cannot auto-discover other servers — the MCP protocol does not permit that.",
+      "description": "Rank a CALLER-PROVIDED list of MCP tools by worst-regret if they act (a name-based heuristic that weights a name's first word most). Read-only: mints no receipt. Cannot auto-discover other servers.",
       "riskLevel": "low",
       "arguments": {
         "inventory": "List of {server, tool, capability} entries supplied by the caller",
@@ -100,41 +106,48 @@
     },
     {
       "name": "mint_action_receipt",
-      "description": "Mint a post-quantum receipt for any consequential agent action, with optional signed attestation provenance (who or what triggered it, and which model decided).",
+      "description": "Mint a receipt for any consequential agent action. Optional attestation values are caller claims: limited to safe characters, signed, not verified. Decisions containing a gate verdict word are reserved for gate_decision.",
       "riskLevel": "low",
       "arguments": {
-        "action": "What the agent did",
-        "resource": "What it acted on",
-        "outcome": "Result of the action",
+        "agent_id": "The acting agent",
+        "operation": "What it did",
+        "target": "What it acted on",
+        "policy": "Optional policy label",
+        "inputs": "Optional inputs (hashed before signing)",
+        "decision": "Optional decision label (not a gate verdict word)",
         "triggered_by_type": "Optional: human / agent / script",
         "triggered_by_source": "Optional: api / cli / cron",
-        "decision_model": "Optional: the LLM model behind the decision"
+        "decision_model": "Optional: the LLM model behind the decision (self-reported)"
       }
     },
     {
       "name": "verify_receipt",
-      "description": "Verify a receipt from the certificate alone — offline, no database, no network. Defaults to PQ-required mode.",
+      "description": "Verify a receipt from the certificate alone (offline). ok=true means unchanged since signing, signed, kid consistent with the embedded key, and (in the default PQ-required mode) at least one post-quantum signature verified. Unsigned receipts fail. It does not prove who signed: pass expected_kid to pin the signer's Ed25519 key; a pin counts only when that key's own signature verifies (signer_pinned). The post-quantum keys are not covered by the kid.",
       "riskLevel": "low",
       "arguments": {
         "receipt": "The receipt object to verify",
-        "require_pq": "Optional override of PQ-required mode"
+        "require_pq": "Optional override of PQ-required mode",
+        "expected_kid": "Optional kid of the key you trust; ok is false unless the receipt's key matches"
       }
     },
     {
       "name": "gate_decision",
-      "description": "Two-phase decision gate. PREVIEW returns a risk assessment and preview_id without acting; COMMIT verifies the inputs still match and mints a tamper-evident receipt carrying an execution permit.",
+      "description": "Two-phase decision gate with a real verdict. PREVIEW returns ALLOW, DENY or ESCALATE with the risk tier and reasons, without acting; COMMIT re-evaluates the inputs and mints a signed receipt for the verdict. Only ALLOW returns a GRANTED permit. Applies only to actions routed through it.",
       "riskLevel": "medium",
       "arguments": {
         "action": "Proposed action",
         "resource": "Target resource",
         "context": "Decision context",
         "phase": "PREVIEW or COMMIT",
-        "preview_id": "Required on COMMIT — ties the commit to its preview"
+        "preview_id": "Required on COMMIT — ties the commit to its preview",
+        "triggered_by_type": "Optional attestation: human / agent / script",
+        "triggered_by_source": "Optional attestation: api / cli / cron",
+        "decision_model": "Optional attestation: the LLM model behind the decision"
       }
     },
     {
       "name": "check_egress",
-      "description": "Classify a data sample as PUBLIC / INTERNAL / CONFIDENTIAL / RESTRICTED before it leaves. Blocks RESTRICTED. Returns classification, retention info, and a receipt.",
+      "description": "Flag sensitive markers in a data sample: NO_MARKERS_FOUND / INTERNAL / CONFIDENTIAL / RESTRICTED. Credential-shaped values and personal identifiers are RESTRICTED and set blocked=true; this tool cannot block anything itself and NO_MARKERS_FOUND is not clearance to send. Returns classification, retention info and a receipt.",
       "riskLevel": "medium",
       "arguments": {
         "destination": "Where the data would go",
@@ -144,26 +157,25 @@
     },
     {
       "name": "run_exit_drill",
-      "description": "Vendor exit-readiness drill: checks local signing key, local model access, and local data export. Informational, no side effects.",
+      "description": "Vendor exit-readiness drill: checks the local signing key (names the post-quantum backend) and a local model host. Informational; it signs one receipt, which creates the signing key on a host that has none yet.",
       "riskLevel": "low",
       "arguments": {}
     }
   ],
   "security": {
     "sandboxed": false,
-    "handlesSecrets": false,
+    "handlesSecrets": true,
     "externalNetwork": [],
     "authMethod": "none-for-stdio-optional-bearer-for-http",
     "verifiable": true,
-    "auditTrail": "Every minted receipt is hybrid-signed (Ed25519 + ML-DSA-65; plus SLH-DSA when liboqs is installed) and carries a 128-bit kid, so a verifier can confirm offline that two receipts came from the same notary. Verification needs no server and no database — the certificate stands on its own."
+    "auditTrail": "Every minted receipt is signed with Ed25519, plus ML-DSA-65 when the post-quantum backend is available and carries a 128-bit kid derived from its Ed25519 key. A verifier can check offline that the receipt is unchanged, signed and consistent with its kid, and can pin the kid it trusts; a pin counts only when the Ed25519 signature verifies. Without a pin, a valid result shows only that whoever holds the embedded keys signed these bytes."
   },
   "metadata": {
-    "ai_safety_category": "policy-enforcement",
-    "compliance_frameworks": ["EU AI Act", "SOC 2", "NIST AI RMF", "CMMC"],
+    "ai_safety_category": "audit-trail",
     "novel_capabilities": [
-      "Post-quantum agent-action receipts (hybrid classical + lattice, optional hash-based leg)",
-      "Offline verification from the certificate alone — no server trust, no database lookup",
-      "Two-phase PREVIEW to COMMIT gate that binds a decision to the inputs it was assessed on"
+      "Agent-action receipts signed with a hybrid classical + lattice scheme (default lattice backend is unhardened)",
+      "Offline verification of integrity from the certificate alone, with optional pinning of the Ed25519 key id",
+      "Two-phase PREVIEW to COMMIT gate that returns ALLOW, DENY or ESCALATE from a read-only allowlist and signs the verdict"
     ]
   }
 }

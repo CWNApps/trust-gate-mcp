@@ -59,7 +59,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
                                 status_code=401)
         # Constant-time compare -- a timing oracle on a 32-char token is recoverable.
         presented = hdr.split(" ", 1)[1].strip()
-        if not hmac.compare_digest(presented, required):
+        if not hmac.compare_digest(presented.encode("utf-8"), required.encode("utf-8")):
             return JSONResponse({"error": "unauthorized",
                                  "message": "bearer token mismatch"}, status_code=401)
         return await call_next(request)

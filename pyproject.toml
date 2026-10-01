@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trust-gate-mcp"
-version = "0.2.1"
-description = "MCP server for Trust Gate — post-quantum, tamper-evident receipts for agent actions. Ed25519 + ML-DSA-65 (FIPS 204), plus SLH-DSA (FIPS 205) when liboqs is installed. Offline verify."
+version = "0.3.0"
+description = "MCP server for Trust Gate — tamper-evident receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65. Offline integrity check."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
-keywords = ["mcp", "trust", "ai-safety", "decision-trust", "trustatom", "ed25519", "ml-dsa", "slh-dsa", "post-quantum", "fips-204", "fips-205"]
+keywords = ["mcp", "trust", "ai-safety", "decision-trust", "trustatom", "ed25519", "ml-dsa", "post-quantum", "fips-204"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -26,26 +26,29 @@ dependencies = [
     # (it became mcp.server.mcpserver), which is the only thing build_server() imports.
     # With a bare >=1.7.0 a fresh install resolves to 2.x and the server cannot start
     # at all. Lift this only together with migrating build_server() to the 2.x API.
-    "mcp>=1.7.0,<2",
-    "httpx>=0.27.0",
+    "mcp>=1.12,<2",
     # The signing primitive every mint/verify tool funnels through. Was previously
     # undeclared, which made a plain `pip install trust-gate-mcp` install a server
     # whose minting tools all returned "openagentontology_unavailable". The [pq]
     # extra is pure-Python (dilithium-py) -- no native toolchain needed -- and gets
     # the ML-DSA-65 leg, without which PQ-required verify (the default) refuses
     # every signed receipt.
-    "openagentontology[pq]>=0.2.0",
+    "openagentontology[pq]>=0.2,<0.3",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
+    "httpx>=0.27.0",
+    "hatchling",
 ]
-# Adds the SLH-DSA (FIPS 205) hash-based third leg via liboqs. Kept optional on
-# purpose: liboqs is a NATIVE dependency, so forcing it would break pure-Python
-# installs. Without it the server signs Ed25519 + ML-DSA-65, which still satisfies
-# PQ-required mode ("at least one PQ leg").
+# Installs liboqs-python (needs the native liboqs library), which the signing primitive prefers for
+# ML-DSA-65. A third, hash-based signature exists only if that liboqs still ships the variant the signing primitive
+# looks for (SPHINCS+-SHA2-128s-simple, which liboqs 0.16 removed). liboqs-python may build liboqs from source
+# the first time it is imported. Kept optional on purpose: liboqs is a NATIVE dependency, so forcing it would break pure-Python
+# installs. Without it the server signs Ed25519 + ML-DSA-65, which still satisfies PQ-required mode
+# ("at least one PQ leg").
 slh = [
     "liboqs-python>=0.10",
 ]
@@ -61,6 +64,12 @@ trust-gate-mcp = "trust_gate_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trust_gate_mcp"]
+
+# The sdist is an allowlist. Hatchling's default is every tracked file, which shipped maintainer
+# notes, publishing scripts, a demo page and listing metadata to PyPI. Only the package, its
+# readme, changelog, licence and build file belong there.
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/README.md", "/CHANGELOG.md", "/LICENSE", "/pyproject.toml"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

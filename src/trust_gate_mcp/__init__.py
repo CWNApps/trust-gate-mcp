@@ -1,24 +1,24 @@
-"""Trust Gate MCP Server -- post-quantum receipts for consequential agent actions.
+"""Trust Gate MCP Server -- hybrid-signed receipts for consequential agent actions.
 
-v0.2.0 ARCHITECTURE CHANGE -- this release evolves Trust Gate MCP from a thin client
-of the hosted cwn-trust-gate.onrender.com backend (v0.1.0) into a SELF-CONTAINED MCP
-server that mints post-quantum receipts locally via the open-source OpenAgentOntology
-primitive. No hosted backend dependency; receipts verify offline from the cert alone.
+A SELF-CONTAINED MCP server: it mints receipts locally via the open-source OpenAgentOntology
+primitive (Ed25519 + ML-DSA-65). No hosted backend
+dependency. A receipt's integrity verifies offline from the certificate alone; who signed it
+needs the signer's kid pinned out of band.
 
-Four tools, all post-quantum by default (Ed25519 + ML-DSA-65 + SLH-DSA):
+Seven tools:
 
+  gate_decision(action, resource, ...)  ALLOW / DENY / ESCALATE verdict + signed receipt
   mint_receipt_for_record_change(...)   tamper-evident per-change receipt for any CRM
-  audit_my_agent_inventory(inventory)   worst-regret ranking of a CALLER-PROVIDED list
+  audit_my_agent_inventory(inventory)   worst-regret ranking of a CALLER-PROVIDED list (mints nothing)
   mint_action_receipt(...)              general-purpose consequential-action receipt
-  verify_receipt(receipt)               offline verify from the certificate alone
-
-The v0.1.0 client.py + config.py modules are kept under this package for callers that
-still need the hosted-backend integration path; they are not used by build_server().
+  verify_receipt(receipt, expected_kid) offline verify from the certificate alone
+  check_egress(...)                     data-sensitivity classification of an outbound payload
+  run_exit_drill()                      vendor-exit readiness check
 
 No receipt. No trust.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .server import build_server, main
 
