@@ -4,34 +4,42 @@ Per Smithery's container-runtime contract: the server must speak MCP Streamable 
 `/mcp` path and listen on the `PORT` env var (Smithery sets PORT=8081). The FastMCP runtime
 ships a streamable_http_app() builder we mount under /mcp.
 
-This file is the deploy adapter only -- all four tools live in server.py and the receipt
+This file is the deploy adapter only -- every tool lives in server.py and the receipt
 primitive is unchanged. Local dev still uses `python server.py` (stdio).
 """
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 from auth import BearerAuthMiddleware, _allowed_origins, auth_active
 from bootstrap import ensure_keys_and_metadata
 from rate_limit import RateLimitMiddleware
-from server import build_server
+from server import build_server, build_server_card
 
 
-def main() -> None:
-    import uvicorn  # only needed for the HTTP transport
+def channel_labels(environ=None) -> set:
+    """Attribution labels the /x counter will record: three built-ins plus any named in the
+    TRUST_GATE_CHANNELS environment variable (comma separated, lowercase letters, digits, hyphens)."""
+    environ = os.environ if environ is None else environ
+    labels = {"direct", "github", "smithery"}
+    for raw in str(environ.get("TRUST_GATE_CHANNELS", "")).split(","):
+        label = raw.strip().lower()
+        if re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", label):
+            labels.add(label)
+    return labels
+
+
+def build_app():
+    """The Starlette application: landing page, counter, server card, the MCP transport and the
+    middleware stack (browser explainer, CORS, bearer auth, rate limit). Reads the environment when
+    it is called."""
     from starlette.applications import Starlette
     from starlette.middleware import Middleware
     from starlette.middleware.cors import CORSMiddleware
     from starlette.responses import HTMLResponse, JSONResponse
     from starlette.routing import Mount, Route
-
-    # Ensure the persistent signing key + metadata exist BEFORE we accept any traffic.
-    # Aborts (exit 78) if the on-disk metadata's kid mismatches the live key -- a silent
-    # mismatch would invalidate every receipt chain.
-    meta = ensure_keys_and_metadata()
-    print(f"[server_http] notary kid={meta.get('kid')} algs={meta.get('algorithms')}",
-          file=sys.stderr)
 
     mcp_server = build_server()
 
@@ -46,59 +54,20 @@ def main() -> None:
     # handshake (e.g. behind a strict redirect, behind an auth wall, etc.) can still
     # learn the server's identity + tool surface. Documented at
     # https://smithery.ai/docs/build/publish (Static Server Card section).
-    SERVER_CARD = {
-        "schemaVersion": "v1",
-        "name": "trust-gate",
-        "version": "0.2.0",
-        "description": ("Post-quantum, tamper-evident receipts for consequential agent "
-                        "actions. Four tools, one shared post-quantum primitive (Ed25519 + "
-                        "ML-DSA-65 + SLH-DSA via OpenAgentOntology). Verifiable offline."),
-        "homepage": "https://github.com/CWNApps/trust-gate-mcp",
-        "license": "Apache-2.0",
-        "tools": [
-            {"name": "mint_receipt_for_record_change",
-             "description": ("Mint a post-quantum receipt for one CRM record change. Old/new "
-                             "values are SHA-256 hashes. Works with any CRM.")},
-            {"name": "audit_my_agent_inventory",
-             "description": ("Rank a CALLER-PROVIDED list of MCP tools by worst-regret if "
-                             "they act. Read-only. Cannot auto-discover other servers "
-                             "(MCP protocol does not allow that).")},
-            {"name": "mint_action_receipt",
-             "description": "Mint a post-quantum receipt for any consequential agent action."},
-            {"name": "verify_receipt",
-             "description": ("Verify a Trust Gate receipt from the certificate alone (offline). "
-                             "Defaults to PQ-required mode -- defends against signature stripping.")},
-        ],
-    }
+    # Built from the server itself (see build_server_card), so the version and tool list are the
+    # running code's, not a hand-written copy.
+    SERVER_CARD = build_server_card(mcp_server)
+    _tools = SERVER_CARD["tools"]
 
     async def server_card(_request):
         return JSONResponse(SERVER_CARD)
 
-    # Telemetry endpoint for agentic-distribution attribution.
-    # Each external listing/PR uses ?via=<channel> on its trust-gate-mcp link.
-    # When a human or agent lands on the page (or follows a link), the landing-page
-    # JS pings /x with the channel + kind, and /x logs ONE line to stderr (which
-    # Render captures + lets us aggregate per-channel). No DB, no IPs, no cookies --
-    # just channel + UA family + kind. Privacy-respecting by design.
-    #
-    # The canonical channel registry (kept in code so it's auditable):
-    KNOWN_CHANNELS = {
-        # Phase A: registries + awesome lists
-        "mcp-so", "pulsemcp", "mcp-get",
-        "awesome-mcp-mcp",        # modelcontextprotocol/servers (official MCP list)
-        "awesome-mcp-punkpeye",   # punkpeye/awesome-mcp-servers
-        "awesome-mcp-appcypher",  # appcypher/awesome-mcp-servers
-        # Phase B reserved (framework adapters)
-        "langchain", "crewai", "llamaindex", "autogen", "pydantic-ai", "letta", "langgraph",
-        # Phase C reserved (community channels)
-        "moltbook", "agentops", "mcp-discord", "owasp-agentic", "reddit", "hn",
-        # Phase D reserved (authority weave)
-        "substack", "linkedin", "twitter",
-        # Bookkeeping
-        "smithery",   # smithery.ai listing back-click
-        "github",     # github repo back-click
-        "direct",     # no via -- direct URL
-    }
+    # Optional attribution counter: a link may carry ?via=<label>. The landing page pings /x with
+    # the label and a kind, and /x logs ONE line to stderr (label, kind, user-agent family). The
+    # application stores no database rows and sets no cookies; the host's own access log may record
+    # request lines. Only labels named in TRUST_GATE_CHANNELS (comma separated) plus the three below
+    # are recorded; anything else is logged as "unknown".
+    KNOWN_CHANNELS = channel_labels()
 
     def _ua_family(ua: str) -> str:
         """Coarse UA family for aggregation. NOT a fingerprint -- we only want one of
@@ -121,13 +90,13 @@ def main() -> None:
         if kind not in ("page", "api", "card", "follow"):
             kind = "page"
         ua_family = _ua_family(request.headers.get("user-agent", ""))
-        # One structured line to stderr -- Render captures + we can grep/aggregate
+        # One structured line to stderr, easy to grep and aggregate
         print(f"[telemetry] via={via} kind={kind} ua={ua_family}", file=sys.stderr)
         return JSONResponse({"ok": True, "via": via, "kind": kind, "ua_family": ua_family})
 
     # Friendly landing page for humans who paste the bare URL into a browser.
     # Anyone hitting the / route is NOT an MCP client (those POST to /mcp). Serving
-    # a small DDU-themed HTML page is more useful than a 404 from Starlette.
+    # a small HTML page is more useful than a 404 from Starlette.
     LANDING_HTML = """<!doctype html>
 <meta charset="utf-8"><title>Trust Gate MCP</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -153,7 +122,7 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
 <h1>Trust Gate <span>MCP.</span></h1>
 <script>
 // Channel-attribution ping. Fires once on landing.
-// ?via=<channel> -> /x?via=<channel>&kind=page. NEVER sends any PII.
+// ?via=<channel> -> /x?via=<channel>&kind=page. Sends only the label and kind, no personal data.
 (function(){
   try {
     var m = (location.search.match(/[?&]via=([^&]+)/) || [null, "direct"]);
@@ -164,7 +133,7 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
   } catch(e) {}
 })();
 </script>
-<p>Post-quantum, tamper-evident receipts for consequential agent actions. Four tools, one shared signing primitive (Ed25519 + ML-DSA-65 + SLH-DSA via OpenAgentOntology). Verifiable offline from the certificate alone.</p>
+<p>Tamper-evident, hybrid-signed receipts for consequential agent actions. __TOOL_COUNT__ tools, one shared signing primitive (Ed25519 + ML-DSA-65, via OpenAgentOntology). Integrity is verifiable offline from the certificate alone; pin the signer's Ed25519 kid to verify authenticity.</p>
 <p><span class="tag">No receipt</span><span class="tag">No trust</span></p>
 <hr>
 <ul>
@@ -174,20 +143,17 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
 <li><b>Source</b><a href="https://github.com/CWNApps/trust-gate-mcp">github.com/CWNApps/trust-gate-mcp</a></li>
 <li><b>OAO primitive</b><a href="https://github.com/CWNApps/openagentontology">github.com/CWNApps/openagentontology</a></li>
 </ul>
-<footer>Apache-2.0. Hardened to CWN pol.must_do.150 (Quantum Hardening + Codex Delivery Completeness).</footer>
+<footer>Apache-2.0.</footer>
 """
 
     async def landing(_request):
-        return HTMLResponse(LANDING_HTML)
+        return HTMLResponse(LANDING_HTML.replace("__TOOL_COUNT__", str(len(_tools))))
 
     # Friendly browser explainer for human-clicked /mcp URLs.
-    # Every Moltbook /agents post, every AgentOps comment, every Discord drop, every
-    # PyPI README links to https://trust-gate-mcp.onrender.com/mcp?via=<channel> as
-    # a verify endpoint. Humans (not MCP clients) will click those links and -- per
-    # MCP spec -- get a JSON-RPC 406 ("Not Acceptable: Client must accept
+    # A human who opens the /mcp URL in a browser gets -- per MCP spec -- a JSON-RPC 406 ("Not Acceptable: Client must accept
     # text/event-stream") which looks like a crash. This middleware catches the
     # browser case (GET /mcp with Accept: text/html and NOT Accept: text/event-stream)
-    # and serves a DDU-themed page explaining what an MCP endpoint is + a copy-paste
+    # and serves a page explaining what an MCP endpoint is + a copy-paste
     # curl example, so curious humans land somewhere useful instead of scary.
     # Real MCP clients (Smithery scan, Claude Desktop, any /mcp POST) are untouched.
     MCP_EXPLAINER_HTML = """<!doctype html>
@@ -213,34 +179,22 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
 </style>
 <div class="kick">Cyber Warrior Network &middot; Trust Gate</div>
 <h1>This is an <span>MCP endpoint</span>, not a webpage.</h1>
-<p><span class="tag">Endpoint OK</span><span class="tag">Server healthy</span> If you got here from a Moltbook, AgentOps, or Discord link, you are in the right place &mdash; just the wrong format. MCP endpoints speak JSON-RPC over HTTP and require a specific <code>Accept</code> header. Your browser sent <code>text/html</code>; the server politely declined, exactly as the spec mandates.</p>
+<p><span class="tag">MCP endpoint</span> If you got here from a link, you are in the right place &mdash; just the wrong format. MCP endpoints speak JSON-RPC over HTTP and require a specific <code>Accept</code> header. Your browser sent <code>text/html</code>; the server politely declined, exactly as the spec mandates.</p>
 
-<h2>Verify a Trust Gate receipt yourself (60 seconds, no install)</h2>
-<pre>curl -X POST <span class="o">https://trust-gate-mcp.onrender.com/mcp</span> \\
+<h2>Call the endpoint yourself (60 seconds, no install)</h2>
+<p>Set <code>MCP_URL</code> to this server's <code>/mcp</code> address first, for example <code>MCP_URL=https://your-host/mcp</code>.</p>
+<pre>curl -X POST <span class="o">"$MCP_URL"</span> \\
   -H "Content-Type: application/json" \\
   -H "Accept: application/json, text/event-stream" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
 
 <h2>Or mint a calling-card receipt</h2>
-<pre>curl -X POST <span class="o">https://trust-gate-mcp.onrender.com/mcp</span> \\
+<pre>curl -X POST <span class="o">"$MCP_URL"</span> \\
   -H "Content-Type: application/json" \\
   -H "Accept: application/json, text/event-stream" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
        "params":{"name":"mint_action_receipt","arguments":{
          "agent_id":"anyone","operation":"hello","target":"world"}}}'</pre>
-
-<h2>Or use the framework adapter</h2>
-<pre>pip install cwn-langchain-trust-gate
-<span class="o"># or cwn-crewai-trust-gate / cwn-llama-index-trust-gate</span>
-
-from langchain_trust_gate import MintActionReceiptTool
-tool = MintActionReceiptTool()
-receipt = tool.invoke({
-    "agent_id": "ops-bot",
-    "operation": "approve_vendor_payment",
-    "target": "invoice-47000",
-})
-print(receipt["atom_id"])</pre>
 
 <p><a class="btn" href="/">&larr; Back to the landing page</a></p>
 
@@ -254,7 +208,7 @@ print(receipt["atom_id"])</pre>
         `Accept: application/json, text/event-stream` or `Accept: text/event-stream`.
         Browsers send `Accept: text/html, ...`. If we see a GET /mcp with text/html
         and NOT text/event-stream, it is a human who clicked a verify-link from a
-        published post -- serve them the DDU explainer instead of the JSON-RPC 406.
+        published post -- serve them the explainer instead of the JSON-RPC 406.
 
         Why a middleware and not a Route: a Route("/mcp", ...) would intercept ALL
         GET /mcp, including legitimate SSE-stream opens from real MCP clients
@@ -332,17 +286,30 @@ print(receipt["atom_id"])</pre>
             # Optional bearer auth -- no-op unless TRUST_GATE_BEARER_TOKEN is set.
             Middleware(BearerAuthMiddleware),
             # Per-IP token-bucket rate-limit. Defaults: 60 mint/min, 600 verify/min,
-            # 120 default/min. Override via RATE_LIMIT_* env. Per-pod (documented in
-            # PUBLISH.md); behind Smithery's gateway this is correct for v1.
+            # 120 default/min. Override via RATE_LIMIT_* env. Per-pod: a horizontally scaled
+            # deployment multiplies the budget.
             Middleware(RateLimitMiddleware),
         ],
     )
+    return app
+
+
+def main() -> None:
+    import uvicorn  # only needed for the HTTP transport
+
+    # Ensure the persistent signing key + metadata exist BEFORE we accept any traffic.
+    # Aborts (exit 78) if the on-disk metadata's kid mismatches the live key -- a silent
+    # mismatch would invalidate every receipt chain.
+    meta = ensure_keys_and_metadata()
+    print(f"[server_http] signing key kid={meta.get('kid')} algs={meta.get('algorithms')}",
+          file=sys.stderr)
+    app = build_app()
     port = int(os.environ.get("PORT", "8081"))
-    # proxy_headers + forwarded_allow_ips=* are needed behind Render's TLS proxy.
-    # Without them uvicorn rejects requests with "Invalid Host header" / 421
-    # because it doesn't trust X-Forwarded-Host from the upstream Cloudflare/Render layer.
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info",
-                proxy_headers=True, forwarded_allow_ips="*")
+    # proxy_headers makes uvicorn take the client address from X-Forwarded-For, but only for the proxies
+    # named in forwarded_allow_ips (default "*" = any, which any client can spoof: set
+    # TRUST_GATE_FORWARDED_ALLOW_IPS to your proxy's address when you have one).
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info", proxy_headers=True,
+                forwarded_allow_ips=os.environ.get("TRUST_GATE_FORWARDED_ALLOW_IPS", "*"))
 
 
 if __name__ == "__main__":

@@ -1,9 +1,6 @@
 # Smithery deployment config -- container runtime (language-agnostic Python path).
-# Reference (verified-or-ABSTAIN per AGENTS.md G5): the canonical schema reference page
-# (smithery.ai/docs/build/project-config/smithery.yaml) is client-rendered and could not be
-# fetched directly during research; runtime contract details below are confirmed by Smithery's
-# publish.md + container-deployment docs. Treat field names as best-known; verify with
-# `smithery validate` (or whatever the current CLI provides) before submission.
+# Smithery container-runtime config. Field names follow Smithery's published examples and have not been
+# validated against the live schema; run `smithery validate` (or the current CLI equivalent) before use.
 runtime: container
 startCommand:
   type: http
@@ -11,21 +8,12 @@ startCommand:
     type: object
     title: Trust Gate MCP configuration
     description: >-
-      Trust Gate exposes post-quantum-signed receipt tools. No secrets are required at the
-      gateway. The toggle below lets a deployer downgrade verification to Ed25519-only for
-      legacy receipts; production deployments should keep it enabled.
-    properties:
-      require_pq:
-        type: boolean
-        title: Require post-quantum verification
-        description: >-
-          When true (default), verify_receipt FAILS if the ML-DSA-65 or SLH-DSA legs are
-          missing -- defends against signature-stripping downgrade attacks. Disable only
-          when verifying legacy Ed25519-only receipts.
-        default: true
+      Trust Gate exposes signed-receipt tools and a decision gate. No secrets are required at the
+      gateway. Post-quantum-required verification is on by default and is set by the
+      TRUST_GATE_REQUIRE_PQ environment variable of the deployment, not by this schema.
+    properties: {}
     required: []
-  exampleConfig:
-    require_pq: true
+  exampleConfig: {}
 build:
   dockerfile: Dockerfile
   dockerBuildPath: "."

@@ -96,7 +96,7 @@ def test_auth_on_narrows_cors(monkeypatch):
 
 
 def test_auth_on_without_allowlist_refuses_implicit_wildcard(monkeypatch):
-    # codex-style fix: under credentials, missing allowlist must NOT default to '*'.
+    # regression: under credentials, missing allowlist must NOT default to '*'.
     monkeypatch.setenv("TRUST_GATE_BEARER_TOKEN", "secret-xyz")
     monkeypatch.delenv("TRUST_GATE_ALLOWED_ORIGINS", raising=False)
     assert _allowed_origins() == []  # CORS denies cross-origin until operator sets the list

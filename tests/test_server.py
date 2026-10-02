@@ -4,12 +4,12 @@ Tests the pure tool functions directly (the FastMCP wiring is a thin decorator l
 mcp package is only needed to actually run the server, not to unit-test the tools). Proves:
 
   1. Each tool mints a receipt that verifies from the cert alone.
-  2. Receipts carry the post-quantum legs (Ed25519 + ML-DSA-65 + SLH-DSA) when the PQ
-     backend is installed -- the standing directive.
+  2. Receipts carry the post-quantum leg (Ed25519 + ML-DSA-65) when the PQ
+     backend is installed -- a design rule.
   3. Tamper detection: a one-field edit to the action breaks verification.
   4. The audit tool refuses to claim auto-discovery -- the honest-scope note is in every
      response and the receipt commits to the caller-provided input.
-  5. The build_server() factory wires four tools when the mcp package is installed.
+  5. The build_server() factory wires all seven tools when the mcp package is installed.
 """
 from __future__ import annotations
 
@@ -20,15 +20,13 @@ import pytest
 from trust_gate_mcp import server as srv
 
 
-# the OAO receipt path must resolve (either installed or via the repo fallback in server.py)
+# the OAO receipt path must resolve (the installed package)
 _HAS_OAO = srv._oao_receipt is not None
 
-# OAO picks its PQ backend at import time and the two tiers sign DIFFERENT leg sets:
-#   liboqs       -> Ed25519 + ML-DSA-65 + SLH-DSA  (triple)
-#   dilithium_py -> Ed25519 + ML-DSA-65            (dual; what `openagentontology[pq]` installs)
-# Asserting the SLH-DSA leg unconditionally made this suite fail on the DEFAULT documented
-# install and pass only where liboqs happened to be present -- i.e. the green run was an
-# artifact of one machine's extras, not a property of the package. Detect the tier instead.
+# OAO picks its PQ backend at import time and the tiers sign different leg sets: with the default
+# `openagentontology[pq]` install a receipt carries Ed25519 + ML-DSA-65; a hash-based leg is present only
+# when the installed liboqs still ships the variant the primitive looks for. Detect the tier instead of
+# asserting a leg that depends on the machine's extras.
 try:
     from openagentontology.pqsign import SLH_DSA_AVAILABLE as _HAS_SLH
 except Exception:  # pragma: no cover - OAO absent entirely; _HAS_OAO already gates those tests
@@ -44,9 +42,8 @@ def test_record_change_mints_pq_receipt_and_verifies():
         changed_by_agent="relaticle-ai@tenant",
     )
     assert "error" not in r
-    # Ed25519 + ML-DSA-65 are guaranteed on every supported install; SLH-DSA only when
-    # the liboqs backend is present. PQ-required verify needs at least one PQ leg, so the
-    # dual-leg tier is still a genuine post-quantum posture -- see _HAS_SLH above.
+    # Ed25519 + ML-DSA-65 are present on every supported install; a hash-based leg only when the
+    # installed liboqs provides it. PQ-required verify needs at least one PQ leg -- see _HAS_SLH above.
     assert r.get("signature_b64"), "missing Ed25519 leg"
     assert r.get("ml_dsa_signature_b64"), "missing ML-DSA-65 leg"
     if _HAS_SLH:
@@ -145,8 +142,8 @@ def test_action_receipt_mints_verifies_and_catches_tamper():
     assert srv.tool_verify_receipt(bad)["ok"] is False
 
 
-# ---- the server factory wires all four tools -----------------------------------------
-def test_build_server_wires_four_tools():
+# ---- the server factory wires all seven tools ----------------------------------------
+def test_build_server_wires_all_seven_tools():
     try:
         import mcp  # noqa: F401
     except ImportError:
@@ -160,5 +157,6 @@ def test_build_server_wires_four_tools():
     expected = {
         "mint_receipt_for_record_change", "audit_my_agent_inventory",
         "mint_action_receipt", "verify_receipt",
+        "gate_decision", "check_egress", "run_exit_drill",
     }
-    assert expected.issubset(set(tool_names)), f"missing tools; got {tool_names}"
+    assert set(tool_names) == expected, f"tool set changed; got {sorted(tool_names)}"

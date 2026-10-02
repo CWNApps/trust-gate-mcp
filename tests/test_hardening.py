@@ -3,7 +3,7 @@
   H1 bootstrap     -- key + metadata file are written and the kid is stable across re-runs.
   H2 rate_limit    -- the token bucket caps a burst at its configured budget.
   H3 require_pq    -- PQ-required verify FAILS on a PQ-stripped receipt and PASSES on a clean one.
-  H4 kid on every  -- every minted receipt carries a non-empty kid that equals sha256(pubkey)[:16].
+  H4 kid on every  -- every minted receipt carries a non-empty kid derived from its Ed25519 key.
 """
 from __future__ import annotations
 
@@ -29,9 +29,9 @@ def test_h4_every_mint_carries_a_stable_kid():
     r1 = srv.tool_mint_action_receipt(agent_id="a", operation="o", target="t")
     r2 = srv.tool_mint_action_receipt(agent_id="b", operation="o2", target="t2")
     assert r1["kid"] and r2["kid"], "every mint must include a kid"
-    # same notary, same key -> same kid even though everything else differs
+    # same signing key -> same kid even though everything else differs
     assert r1["kid"] == r2["kid"], "kid must be stable across mints with the same key"
-    # kid = sha256(pubkey_b64)[:32] (128 bits -- codex-required for adversarial use)
+    # kid = sha256 of the canonical key, first 32 hex characters (128 bits, for adversarial use)
     expected = hashlib.sha256(r1["verify_pubkey_b64"].encode("ascii")).hexdigest()[:32]
     assert r1["kid"] == expected
     assert len(r1["kid"]) == 32, "kid must be 128 bits (32 hex chars)"
@@ -49,7 +49,7 @@ def test_h4_kid_is_inherited_by_all_four_tool_paths():
         agent_id="x", operation="audit", target="x",
         inputs=str(aud["audit_manifest_for_receipt"]))
     kids = {r_change["kid"], r_action["kid"], r_for_audit["kid"]}
-    assert len(kids) == 1 and next(iter(kids)), "all tools must share one kid (one notary)"
+    assert len(kids) == 1 and next(iter(kids)), "all tools must share one kid (one signing key)"
 
 
 # ---- H3 PQ-required verify -----------------------------------------------------------
@@ -119,14 +119,16 @@ def test_h1_bootstrap_fails_closed_on_kid_drift(tmp_path):
 
 def test_h1_kid_helper_matches_server_kid():
     # both helpers must produce the same kid for the same pubkey -- shared algorithm
-    pub = "TESTPUBKEYB64=="
+    import base64
+    pub = base64.b64encode(bytes(range(32))).decode("ascii")
     assert _kid_for_pubkey_b64(pub) == hashlib.sha256(pub.encode("ascii")).hexdigest()[:32]
     assert len(_kid_for_pubkey_b64(pub)) == 32
+    assert _kid_for_pubkey_b64("TESTPUBKEYB64==") == ""     # not a 32-byte key: no kid
 
 
 @pytest.mark.skipif(not _HAS_OAO, reason="OAO not available")
 def test_h1_bootstrap_fails_closed_on_unreadable_metadata(tmp_path):
-    # codex's fix #2: unreadable metadata must be FATAL, not a warn-and-continue
+    # regression: unreadable metadata must be FATAL, not a warn-and-continue
     keyfile = tmp_path / "receipt_ed25519.pem"
     ensure_keys_and_metadata(key_path=str(keyfile))
     metafile = tmp_path / "key_metadata.json"
@@ -138,7 +140,7 @@ def test_h1_bootstrap_fails_closed_on_unreadable_metadata(tmp_path):
 
 @pytest.mark.skipif(not _HAS_OAO, reason="OAO not available")
 def test_h1_bootstrap_fails_closed_on_missing_kid_field(tmp_path):
-    # codex's fix #2: metadata missing the kid field must be FATAL too
+    # regression: metadata missing the kid field must be FATAL too
     keyfile = tmp_path / "receipt_ed25519.pem"
     ensure_keys_and_metadata(key_path=str(keyfile))
     metafile = tmp_path / "key_metadata.json"
@@ -168,7 +170,7 @@ def test_h2_token_bucket_refills_proportionally(monkeypatch):
 
 
 def test_h2_middleware_classifies_by_body_keywords():
-    # the bucket-picker uses simple substring tests; verify mint vs verify vs default
+    # the bucket-picker classifies by the parsed tool name: mint vs verify vs default
     mw = RateLimitMiddleware(app=None)
     buckets, cap = mw._bucket_for('{"method":"tools/call","params":{"name":"mint_action_receipt"}}')
     assert buckets is mw._mint_buckets and cap == mw.mint_cap
@@ -186,7 +188,7 @@ def test_h2_env_overrides_budgets(monkeypatch):
 
 
 def test_h2_bucket_dict_is_bounded_against_ip_rotation_attack():
-    # codex's fix #3: an attacker rotating IPs cannot grow the dict without limit.
+    # regression: an attacker rotating IPs cannot grow the dict without limit.
     mw = RateLimitMiddleware(app=None)
     mw.MAX_BUCKETS_PER_CLASS = 100  # shrink for a fast test
     for i in range(250):

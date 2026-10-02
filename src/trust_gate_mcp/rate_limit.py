@@ -1,18 +1,22 @@
 """rate_limit.py -- minimal in-memory token-bucket starlette middleware.
 
 A signing-oracle that anyone can hit unbounded is a free abuse vector, so any public listing
-needs SOME per-IP cap before the URL is published. This 30-line bucket gives us that without
+needs SOME per-IP cap before the URL is published. This small bucket gives us that without
 adding a runtime dep.
 
 Caveats (documented, not workarounds):
   * Per-pod. If the deploy scales horizontally, an attacker hitting N replicas gets N x the
-    budget. Honest answer: behind Smithery's gateway this is fine for v1; if usage warrants,
-    move the limiter to the gateway or to a shared Redis bucket.
-  * Identifies clients by the first IP in X-Forwarded-For, falling back to the connection peer.
-    Spoofable upstream of a trusted gateway; honest behind one.
+    budget; put the limit at a gateway or in a shared store if you run more than one.
+  * Signing runs on the event loop (about 70 ms per call with the default backend), so the per-IP
+    budget bounds one client but there is no overall cap on signing work.
+  * Identifies clients by request.client, which uvicorn fills from X-Forwarded-For only for the
+    proxies named in TRUST_GATE_FORWARDED_ALLOW_IPS (default: any, which is spoofable; set it to your
+    proxy's address when you have one). A request is refused with 413 as soon as its body exceeds
+    MAX_REQUEST_BYTES (at most that much is buffered).
 
 Default budgets (per IP):
-  - mint_*    60/min  (signing oracle; cheap CPU but unbounded mint = unbounded receipt spam)
+  - signing tools (mint_*, gate_decision, check_egress, run_exit_drill)  60/min  (a signing oracle;
+    unbounded signing = unbounded receipt spam)
   - verify_*  600/min (read-only; bound only to stop a thrash attack)
   - default   120/min (everything else)
 
@@ -21,18 +25,21 @@ Override at runtime via env: RATE_LIMIT_MINT_PER_MIN, RATE_LIMIT_VERIFY_PER_MIN,
 DoS hardening:
   * MAX_BUCKETS_PER_CLASS caps the per-IP bucket dict so an attacker rotating IPs cannot
     grow our memory unboundedly. Oldest entries are evicted (FIFO via dict insertion order).
-  * MAX_BODY_BYTES caps the body we read for classification. A larger body is read but the
-    classification is deferred to the default bucket, avoiding a memory amplification path.
+  * MAX_BODY_BYTES caps the body we PARSE for classification; a body over it, or one that cannot be
+    parsed, is charged to the signing bucket, so padding or re-encoding a call buys no extra
+    budget. MAX_REQUEST_BYTES caps what is buffered at all (413 above it).
+  * Verification also runs on the event loop (about 20 ms), so the verify budget bounds one client
+    but is not an overall cap either.
 """
 from __future__ import annotations
 
+import json
+
 import os
 import time
-from typing import Awaitable, Callable
 
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 
 
 def _budget(name: str, default: int) -> int:
@@ -66,22 +73,26 @@ class TokenBucket:
         return False
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Per-IP, per-route-class token-bucket limiter.
+class RateLimitMiddleware:
+    """Per-IP, per-route-class token-bucket limiter, written as plain ASGI middleware so that the body it
+    buffers is replayed to the application (a BaseHTTPMiddleware would hand the endpoint an empty one).
 
     Classifies by the JSON-RPC tool name in the request body when possible (so mint and verify
     have separate budgets). When the body isn't a tool-call (handshake, list_tools, etc.), it
-    uses the default budget. Unparseable bodies fail-open to the default budget; they don't
-    block the protocol's handshake messages."""
+    uses the default budget. A body that cannot be parsed is charged to the signing bucket."""
 
-    MINT_KEYWORDS = ("mint_", "mint:")
-    VERIFY_KEYWORDS = ("verify_", "verify:")
-    # Caps to close the two memory-DoS amplification paths codex flagged:
+    # Tools that SIGN. gate_decision, check_egress and run_exit_drill sign as well as the mint_ tools
+    # do, so they share the mint budget. Classification uses the parsed JSON-RPC tool name.
+    SIGNING_TOOLS = frozenset({"mint_receipt_for_record_change", "mint_action_receipt",
+                               "gate_decision", "check_egress", "run_exit_drill"})
+    VERIFY_TOOLS = frozenset({"verify_receipt"})
+    # Caps to close the two memory-DoS amplification paths found in testing:
     MAX_BUCKETS_PER_CLASS = 4096   # ~64KB / class; FIFO-evict the oldest IP once full
-    MAX_BODY_BYTES = 64 * 1024     # read at most 64 KiB to classify; bigger -> default bucket
+    MAX_BODY_BYTES = 64 * 1024     # parse at most 64 KiB to classify; bigger -> the SIGNING bucket
+    MAX_REQUEST_BYTES = 1024 * 1024  # refuse anything larger with 413 before it is buffered
 
     def __init__(self, app) -> None:
-        super().__init__(app)
+        self.app = app
         self._mint_buckets: dict[str, TokenBucket] = {}
         self._verify_buckets: dict[str, TokenBucket] = {}
         self._default_buckets: dict[str, TokenBucket] = {}
@@ -108,55 +119,101 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return b
 
     def _ip(self, request: Request) -> str:
-        fwd = request.headers.get("x-forwarded-for", "")
-        if fwd:
-            return fwd.split(",", 1)[0].strip()
+        # The server (uvicorn) resolves X-Forwarded-For according to FORWARDED_ALLOW_IPS /
+        # TRUST_GATE_FORWARDED_ALLOW_IPS before this middleware runs, so request.client is the one
+        # place the client identity comes from. Reading the header here as well would let any client
+        # choose its own identity even when no proxy is trusted.
         return request.client.host if request.client else "unknown"
 
-    def _bucket_for(self, body_text: str):
-        # Heuristic, fast: look for the tool name in the body. The MCP body is JSON-RPC --
-        # any keyword we'd block on will appear as `"name":"mint_..."` or similar. We don't
-        # parse JSON because a malformed body should still be classified, not 500'd here.
-        lowered = body_text.lower()
-        if any(k in lowered for k in self.MINT_KEYWORDS):
+    @staticmethod
+    def _tool_names(body):
+        """Tool names called by a JSON-RPC body (single call or batch), or None if the body cannot be
+        parsed. The body is parsed as the application parses it, from the raw bytes (so a byte-order
+        mark, UTF-16 and UTF-32 are read exactly as the transport reads them). Parsing decodes
+        escapes, so "m\\u0069nt_action_receipt" is seen as what it is, and a tool name can no longer be
+        dodged by hiding a word in the arguments."""
+        try:
+            data = json.loads(body)
+        except (ValueError, RecursionError):   # includes UnicodeDecodeError
+            return None
+        items = data if isinstance(data, list) else [data]
+        names = set()
+        for item in items:
+            if isinstance(item, dict) and item.get("method") == "tools/call":
+                params = item.get("params")
+                if isinstance(params, dict) and isinstance(params.get("name"), str):
+                    names.add(params["name"])
+        return names
+
+    def _bucket_for(self, body):
+        """The bucket store and cap for a request body (bytes or text). A body that cannot be parsed is
+        charged to the signing bucket: it cannot be classified, and the strict budget is the safe one."""
+        if not body:
+            return self._default_buckets, self.default_cap
+        names = self._tool_names(body)
+        if names is None:
             return self._mint_buckets, self.mint_cap
-        if any(k in lowered for k in self.VERIFY_KEYWORDS):
+        if names & self.SIGNING_TOOLS:
+            return self._mint_buckets, self.mint_cap
+        if names & self.VERIFY_TOOLS:
             return self._verify_buckets, self.verify_cap
         return self._default_buckets, self.default_cap
 
-    async def dispatch(self, request: Request,
-                       call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
         ip = self._ip(request)
         body_bytes = b""
         oversized = False
+        replay = receive
         # Only read the body for POST-like calls; GET/HEAD/handshake should not touch it.
-        if request.method in ("POST", "PUT", "PATCH"):
-            full_body = await request.body()
+        if scope["method"] in ("POST", "PUT", "PATCH"):
+            chunks, total = [], 0
+            while True:                      # stops reading at the cap, with or without a Content-Length
+                message = await receive()
+                if message["type"] == "http.disconnect":
+                    return
+                chunk = message.get("body", b"")
+                total += len(chunk)
+                if total > self.MAX_REQUEST_BYTES:
+                    await JSONResponse({"error": "request_too_large"}, status_code=413)(scope, receive, send)
+                    return
+                chunks.append(chunk)
+                if not message.get("more_body", False):
+                    break
+            full_body = b"".join(chunks)
             if len(full_body) > self.MAX_BODY_BYTES:
-                # Don't parse what could be a memory-amplification payload. Classify as
-                # default + still forward the full body so the downstream handler can
+                # Don't parse what could be a memory-amplification payload. Padding a call past
+                # the cap must not buy a bigger budget, so classify it into the stricter signing
+                # bucket, and still forward the full body so the downstream handler can
                 # reject/accept it on its own merits.
                 oversized = True
                 body_bytes = b""
             else:
                 body_bytes = full_body
+            delivered = False
 
-            # Restore the body for downstream handlers (we already consumed it).
-            async def _receive():
-                return {"type": "http.request", "body": full_body, "more_body": False}
-            request._receive = _receive  # type: ignore[attr-defined]
+            async def replay():
+                """The buffered body once, then whatever the server sends next (a disconnect)."""
+                nonlocal delivered
+                if not delivered:
+                    delivered = True
+                    return {"type": "http.request", "body": full_body, "more_body": False}
+                return await receive()
 
         if oversized:
-            buckets, cap = self._default_buckets, self.default_cap
+            buckets, cap = self._mint_buckets, self.mint_cap
         else:
-            buckets, cap = self._bucket_for(
-                body_bytes.decode("utf-8", errors="replace") if body_bytes else "")
+            buckets, cap = self._bucket_for(body_bytes)
         b = self._get_or_create(buckets, ip, cap)
         if not b.take():
-            return JSONResponse(
+            await JSONResponse(
                 {"error": "rate_limited",
                  "message": f"Per-IP cap ({cap}/min) reached for this tool class. "
                             "Per-pod limiter -- back off and retry."},
                 status_code=429,
-                headers={"Retry-After": "60"})
-        return await call_next(request)
+                headers={"Retry-After": "60"})(scope, receive, send)
+            return
+        await self.app(scope, replay, send)

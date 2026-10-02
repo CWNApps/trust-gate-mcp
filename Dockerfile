@@ -4,26 +4,23 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# git is needed for the OAO install from a VCS URL until OAO is published to PyPI.
-# --no-install-recommends keeps the layer slim; we clean apt lists after to shave more.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/*
-
 RUN python -m pip install --no-cache-dir --upgrade pip
 
-# Pin the runtime deps. The post-quantum legs come from openagentontology[pq].
+# Runtime deps, from PyPI with version bounds. The post-quantum legs come from openagentontology[pq];
+# by default that is dilithium-py, a pure-Python library its authors say is not for cryptographic use
+# (see README). Add liboqs-python to this image for a native backend (it may build liboqs from source
+# the first time it is imported).
 RUN pip install --no-cache-dir \
         "mcp>=1.12,<2" \
-        "openagentontology[pq] @ git+https://github.com/CWNApps/openagentontology.git@main" \
+        "openagentontology[pq]>=0.2,<0.3" \
         "uvicorn>=0.30" \
         "starlette>=0.37"
 
 COPY src/trust_gate_mcp/server.py src/trust_gate_mcp/server_http.py src/trust_gate_mcp/bootstrap.py src/trust_gate_mcp/rate_limit.py src/trust_gate_mcp/auth.py /app/
 
-# Persistent state directory for the Ed25519 + ML-DSA-65 + SLH-DSA signing keys
-# AND key_metadata.json. Mount a volume here at deploy time -- without it the key
-# rotates every container restart and breaks every receipt's verification chain.
+# Persistent state directory for the signing keys AND key_metadata.json. Mount a volume here at
+# deploy time -- without it the key changes on every container restart: receipts signed earlier still
+# verify from their own certificate, but a pinned kid stops matching new ones.
 ENV OAO_RECEIPT_KEY=/data/oao/receipt_ed25519.pem
 ENV OAO_REQUIRE_PQ=true
 RUN mkdir -p /data/oao
