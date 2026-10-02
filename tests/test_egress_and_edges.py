@@ -75,7 +75,8 @@ def test_a_credential_in_the_provider_field_is_classified_and_never_echoed_or_si
 @needs_oao
 def test_the_classifier_stays_linear_on_glued_secret_names():
     samples = ["password" * 8192, "PASSWORD_" * 7000, "a" * 65000, "secret_" + "x" * 60000, "pwd=" * 16000,
-               "api_key: " * 7000, "eyJ" * 20000, "1234 " * 12000]
+               "api_key: " * 7000, "eyJ" * 20000, "1234 " * 12000,
+               "1 " * 32000, "1." * 32000, "1111111 " * 8000, ("1" * 19 + " ") * 3200]
     for text in samples:
         started = time.perf_counter()
         srv._classify_egress(text, "dest")
@@ -318,3 +319,62 @@ def test_a_malformed_model_host_is_not_local_and_does_not_crash_the_drill(monkey
     monkeypatch.setenv("OLLAMA_HOST", "http://[abc")
     out = srv.tool_run_exit_drill()
     assert out["readiness"] == "PARTIAL" and out["steps"][1]["status"] == "UNKNOWN"
+
+
+
+def _naive_luhn(digits: str) -> bool:
+    """An independent Luhn check, written differently from the one under test."""
+    total = 0
+    for position, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if position % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def _naive_group_window(groups):
+    for i in range(len(groups)):
+        for j in range(i + 1, len(groups) + 1):
+            joined = "".join(groups[i:j])
+            if 13 <= len(joined) <= 19 and _naive_luhn(joined):
+                return True
+    return False
+
+
+def _with_check_digit(body: str) -> str:
+    for c in "0123456789":
+        if _naive_luhn(body + c):
+            return body + c
+    raise AssertionError("no check digit")
+
+
+def test_the_window_scan_agrees_with_an_independent_luhn_on_random_group_lists():
+    import random
+    rng = random.Random(20261002)
+    positives = 0
+    for _ in range(4000):
+        groups = ["".join(rng.choice("0123456789") for _ in range(rng.randint(1, 7))) for _ in range(rng.randint(1, 9))]
+        if rng.random() < 0.4:           # plant a valid 13-19 digit number split into groups, with extra groups around it
+            size = rng.randint(13, 19)
+            card = _with_check_digit("".join(rng.choice("0123456789") for _ in range(size - 1)))
+            cut = sorted(rng.sample(range(1, size), rng.randint(0, 4)))
+            parts = [card[a:b] for a, b in zip([0] + cut, cut + [size])]
+            groups = groups[: rng.randint(0, 2)] + parts + groups[: rng.randint(0, 2)]
+        expected = _naive_group_window(groups)
+        positives += expected
+        assert srv._groups_hold_card_number(groups) == expected, groups
+    assert positives > 400, positives     # the positive case is really exercised
+
+
+@pytest.mark.parametrize("sample", ["4111 1111 1111 1111 123", "4111 1111 1111 1111 12/25", "4111-1111-1111-1111-123", "1 4111 1111 1111 1111",
+                                    "2024-4111-1111-1111-1111", "3782 822463 10005 1234", "4111111111111111 123", "exp 12 25 card 5500 0000 0000 0004 123"])
+def test_a_card_number_next_to_another_group_is_restricted(sample):
+    assert srv._classify_egress(sample, "partner.example")[0] == "RESTRICTED", sample
+
+
+@pytest.mark.parametrize("sample", ["4111 1111 1111 1112 123", "order 1696243200000000 shipped", "1111 1111 1111", "12 25 123 4111 1111", "4111111111111111111111 1"])
+def test_other_digit_runs_are_not_taken_for_cards(sample):
+    assert srv._classify_egress(sample, "partner.example")[0] == "NO_MARKERS_FOUND", sample

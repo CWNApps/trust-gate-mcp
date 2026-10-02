@@ -43,7 +43,8 @@ it is now issued only for the read-only names described below. See "Upgrading" f
   one long integer, `0`, `localhost` and the other loopback names; short dotted numbers such as `1.2.3` stay
   versions unless the last number is too large for a version or the first is `0` or `127`), a resource that
   starts with `-`, a phrase of three or more words, characters other than letters, digits, spaces and
-  `_ . - /`, and a file whose real type is configuration, data, keys, state or an archive. The real type is the
+  `_ . - /` (after Unicode compatibility folding), and a file whose real type is configuration, data, keys,
+  state or an archive. The real type is the
   last extension that is not a rotation or version counter (`app.log.1` is `.log`); a listed data or archive type
   earlier in a dotted name (`users.csv.txt`) counts as well. The last real path segment is judged and every
   segment is trimmed of whitespace first, so a trailing separator, `/./` or a stray space hides nothing.
@@ -102,7 +103,8 @@ it is now issued only for the read-only names described below. See "Upgrading" f
 - `check_egress`: the all-clear label `PUBLIC` is now `NO_MARKERS_FOUND` (breaking), because it never meant
   the data was safe to send. A finite list of credential formats (cloud keys, access tokens, private keys,
   JWTs, passwords in URLs, bearer tokens, `NAME=value` assignments whose name ends in a credential word, in any
-  letter case) and personal-identifier shapes (SSN, Luhn-checked card numbers) is RESTRICTED and sets
+  letter case) and personal-identifier shapes (SSN, Luhn-checked card numbers, also when another digit group such as a CVV or
+  an expiry sits next to them) is RESTRICTED and sets
   `blocked: true`; credential keywords alone are CONFIDENTIAL; keywords match inside `SNAKE_CASE` names. The
   `provider` field is scanned and limited to 200 characters, and is withheld from the response and the receipt
   when it would be RESTRICTED. Input is limited to 65,536 characters and scanned in linear time. The tool flags

@@ -259,7 +259,7 @@ def test_dates_and_versions_are_not_mistaken_for_identifiers(resource):
     assert verdict("read_file", resource) == "ALLOW", resource
 
 
-# ---- a host followed only by a separator is still a host; my own rule-by-rule gaps ---------------------------------------
+# ---- a host followed only by a separator is still a host; rules pinned one by one ---------------------------------------
 @pytest.mark.parametrize("resource", ["docs.rs/", "api.md/.", "site.cc//", "12345678.87654321.data-api.md/", "docs.rs/./", "blog.app/"])
 def test_a_host_followed_only_by_a_separator_is_still_a_host(resource):
     for action in ("get_page", "read_file"):
@@ -289,3 +289,27 @@ def test_a_run_of_nine_digits_escalates_and_eight_does_not(resource):
 def test_a_short_dotted_number_with_an_oversized_last_part_is_an_address(resource):
     got = srv._gate_assessment("get_page", resource)
     assert got["verdict"] == "ESCALATE" and "network address" in got["reasons"][0], (resource, got)
+
+
+# ---- a card number next to another digit group (a CVV, an expiry, a prefix) is still a card number --------------------
+@pytest.mark.parametrize("resource", [
+    "user/4111-1111-1111-1111-123", "user/4111-1111-1111-1111-1", "user/4111_1111_1111_1111_123", "user/4111.1111.1111.1111.123",
+    "user/1-4111-1111-1111-1111", "user/2024-4111-1111-1111-1111", "user/5500-0000-0000-0004-123", "user/3782-822463-10005-1234",
+    "docs/4111-1111-1111-1111-123/readme.md", "user/4111111111111111 123", "user/123 4111111111111111",
+])
+def test_a_card_number_next_to_another_group_escalates(resource):
+    got = srv._gate_assessment("get_user", resource)
+    assert got["verdict"] == "ESCALATE" and "looks like a card" in got["reasons"][0], (resource, got)
+
+
+@pytest.mark.parametrize("action", ["get_user_4111_1111_1111_1111_123", "get user 4111 1111 1111 1111 123", "get-user-1-4111-1111-1111-1111"])
+def test_a_card_number_next_to_another_group_in_the_action_escalates(action):
+    got = srv._gate_assessment(action, "docs")
+    assert got["verdict"] == "ESCALATE" and "looks like a card" in got["reasons"][0], (action, got)
+
+
+@pytest.mark.parametrize("resource", ["user/4111-1111-1111-1112", "user/4111-1111-1111-1112-123"])
+def test_a_group_run_that_fails_the_check_digit_is_not_taken_for_a_card(resource):
+    # 8 digits or fewer per group and no 9-digit run, no valid 13-19 digit window: the documented Luhn behaviour stands
+    got = srv._gate_assessment("get_user", resource)
+    assert got["verdict"] == "ALLOW", (resource, got)

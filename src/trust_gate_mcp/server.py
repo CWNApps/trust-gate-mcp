@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import bisect
 import hashlib
 import itertools
 import json
@@ -455,7 +456,8 @@ _INTERNAL_DATA = _words(
     r"embargoed|pre.?release|nda|board.?minutes")
 # Values that look like secrets or identifiers even when no keyword names them.
 _SSN_SHAPE = re.compile(r"(?<!\d)\d{3}[- ]\d{2}[- ]\d{4}(?!\d)")
-_CARD_SHAPE = re.compile(r"(?<!\d)(?:\d[ ._-]?){12,18}\d(?!\d)")
+_DIGIT_CHAIN = re.compile(r"(?<!\d)\d+(?:[ ._-]\d+)*(?!\d)")    # digit groups joined by one separator each
+_GROUP_SEPARATOR = re.compile(r"[ ._-]")
 _SECRET_SHAPES = re.compile(
     r"(?:AKIA|ASIA)[0-9A-Z]{16}|gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|"
     r"[Bb]earer\s+[A-Za-z0-9._~+/=-]{20,}|"
@@ -486,23 +488,35 @@ _MAX_EGRESS_CHARS = 65536
 _MAX_PROVIDER_CHARS = 200
 
 
-def _luhn_ok(digits: str) -> bool:
-    total, flip = 0, False
-    for ch in reversed(digits):
-        d = int(ch)
-        if flip:
-            d = d * 2 - 9 if d * 2 > 9 else d * 2
-        total += d
-        flip = not flip
-    return total % 10 == 0
+def _groups_hold_card_number(groups: List[str]) -> bool:
+    """True when some run of WHOLE digit groups is 13-19 digits long and passes the Luhn check. A card
+    printed next to a CVV, an expiry or a prefix ("4111 1111 1111 1111 123") is still found, and a plain
+    14-19 digit number is judged as one number, as before. Prefix sums make each window O(1)."""
+    bounds = [0]
+    for g in groups:
+        bounds.append(bounds[-1] + len(g))
+    if bounds[-1] < 13:
+        return False
+    digits = [int(c) for g in groups for c in g]
+    # even[k]: Luhn sum of digits[:k] when the digit at an even index is counted plain; odd[k]: the reverse.
+    even, odd = [0], [0]
+    for j, d in enumerate(digits):
+        dd = d * 2 - 9 if d > 4 else d * 2
+        even.append(even[-1] + (d if j % 2 == 0 else dd))
+        odd.append(odd[-1] + (dd if j % 2 == 0 else d))
+    for i, start in enumerate(bounds[:-1]):
+        lo = bisect.bisect_left(bounds, start + 13, i + 1)
+        hi = bisect.bisect_right(bounds, start + 19, i + 1)
+        for j in range(lo, hi):
+            end = bounds[j]
+            prefix = even if (end - 1) % 2 == 0 else odd     # the window's last digit is always counted plain
+            if (prefix[end] - prefix[start]) % 10 == 0:
+                return True
+    return False
 
 
 def _has_card_number(text: str) -> bool:
-    for m in _CARD_SHAPE.finditer(text):
-        digits = re.sub(r"\D", "", m.group(0))
-        if 13 <= len(digits) <= 19 and _luhn_ok(digits):
-            return True
-    return False
+    return any(_groups_hold_card_number(_GROUP_SEPARATOR.split(chain.group(0))) for chain in _DIGIT_CHAIN.finditer(text))
 
 
 _EGRESS_RETENTION: Dict[str, str] = {
