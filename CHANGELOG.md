@@ -36,9 +36,8 @@ it is now issued only for the read-only names described below. See "Upgrading" f
   file types (`md`, `txt`, `py` and similar), with digits allowed between words (`docs/2024/notes.md`). A name
   that contains any other word escalates to a human, because the gate has not seen it. This is deliberately
   narrow: most real file names escalate. Widening it means adding words to the vocabulary in the source, which is
-  a visible change. The listed read-verb forms are written out one by one; a generated form once made `readd`
-  (re-add) a read verb.
-- Structural rules escalate as well, each with its own reason: an absolute path, a hidden path (`.env`, `.ssh`,
+  a visible change. The listed read-verb forms are written out one by one.
+- Structural rules escalate as well: an absolute path, a hidden path (`.env`, `.ssh`,
   `.git`), a parent-directory path, a URL, a host name as the first part of a path (`example.com/x`), a network
   address in any of its usual spellings (four dotted numbers of any width, hexadecimal, octal such as `0177.1`,
   one long integer, `0`, `localhost` and the other loopback names; short dotted numbers such as `1.2.3` stay
@@ -75,9 +74,7 @@ it is now issued only for the read-only names described below. See "Upgrading" f
 - `expected_kid` pins the signer. It must be 32 hexadecimal characters (case and surrounding spaces are ignored; a blank or malformed pin is refused)
   and counts only when that key's own Ed25519 signature verifies; `signer_pinned` is true only then. `kid` is
   reported only when the Ed25519 signature verified, and a receipt whose Ed25519 key is spelled with a stray
-  character is refused. Before, a forger could copy the public Ed25519 key from any genuine receipt, drop
-  the Ed25519 signature and attach a post-quantum signature made with a key of their own: the receipt verified,
-  reported the genuine `kid` and passed a pin. The `kid` is computed from the canonical bytes of the key.
+  character is refused. A receipt cannot borrow another receipt's key or kid: those are public, and a signature from some other key does not stand in for them. The `kid` is computed from the canonical bytes of the key.
 - The post-quantum keys inside a receipt are not covered by the `kid`. PQ-required mode shows that a
   post-quantum signature is present and valid, not whose it is, and a pinned check is only as strong against a
   quantum attacker as Ed25519.
@@ -90,7 +87,9 @@ it is now issued only for the read-only names described below. See "Upgrading" f
   permit, approve, withheld, committed; also with digits or symbols swapped in, such as `ALL0W` or `gr@nted`),
   operation names with `gate` as a word (also digit-swapped) or containing both "decision" and "gate", the gate's own policy id, and non-printable-ASCII text. This is best effort and
   is not the trust boundary: every tool signs an `issuer_tool` field into its manifest, and a gate verdict is
-  one whose manifest says `issuer_tool: gate_decision` and `operation: decision_gate_commit`. This is breaking
+  one whose manifest says `issuer_tool: gate_decision` and `operation: decision_gate_commit` AND whose signer you
+  have pinned (`expected_kid` with `signer_pinned: true`); without the pin those fields are claims made by
+  whoever signed. This is breaking
   for anyone who used those decision values.
 - `TRUST_GATE_REQUIRE_PQ` fails closed: only `0`, `false`, `no` or `off` turn PQ-required mode off (and
   `OAO_REQUIRE_PQ` does the same when `TRUST_GATE_REQUIRE_PQ` is empty).
@@ -153,9 +152,9 @@ it is now issued only for the read-only names described below. See "Upgrading" f
 ### Documentation
 - Removed claims the code did not support: SLH-DSA as a default leg, "no server to trust", compliance-framework
   lists, "audit_my_agent_inventory ... with a signed receipt" (it mints nothing), "blocks RESTRICTED",
-  "escalate wherever they appear", "never stored in the clear", "defeats signature stripping" and
-  "survives a lattice break". Removed internal identifiers from public files, and added a test for generic markers
-  (workstation paths, agent instruction files, model names, personal addresses).
+  "never stored in the clear", "defeats signature stripping" and
+  "survives a lattice break". Removed wording that did not belong in public files, and added a test that fails on drive-letter and
+  home-directory paths and personal mail domains.
 - Stated plainly what the default install signs with: `pip install trust-gate-mcp` gets its ML-DSA-65 leg from
   `dilithium-py`, a pure-Python library whose own README says it must not be used for cryptographic
   applications and that it is not constant-time. That leg keeps receipts tamper-evident and satisfies

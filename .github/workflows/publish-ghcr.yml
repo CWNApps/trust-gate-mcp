@@ -1,7 +1,6 @@
 # Publish the Trust Gate MCP container image to GitHub Container Registry.
 # Zero external credentials -- uses the automatic, repo-scoped GITHUB_TOKEN,
-# not a Docker Hub account/token. Same "no secret ever touches a human or an
-# agent" pattern as the PyPI Trusted Publishing workflow.
+# not a Docker Hub account or token (the same pattern as the PyPI Trusted Publishing workflow).
 #
 # Image: ghcr.io/cwnapps/trust-gate-mcp
 

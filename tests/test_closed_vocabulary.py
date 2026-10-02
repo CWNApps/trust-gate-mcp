@@ -240,3 +240,52 @@ def test_glued_plural_and_digit_swapped_sensitive_words_give_the_high_tier():
     for resource in ("sh4d0w", "passw0rd.txt", "driverslicense.txt", "pinfile.txt", "historyshell"):
         got = srv._gate_assessment("read_file", resource)
         assert got["verdict"] == "ESCALATE" and got["tier"] == "HIGH", (resource, got)
+
+
+# ---- identifier-shaped numbers with any separator --------------------------------------------------------------------
+@pytest.mark.parametrize("action, resource", [
+    ("get_user", "user/4111/1111/1111/1111"), ("get_user", "user/078_05_1120"), ("get_user", "user/078/05/1120"),
+    ("get_user", "user/5500_0000_0000_0004"), ("read_file", "docs/4111/1111/1111/1111.md"),
+    ("get_user_078_05_1120", "user"), ("get_user", "users/123_45_6789"), ("read_file", "users_123_45_6789"),
+    ("get_user", "user 4111 1111 1111 1111"), ("get_user", "user.078.05.1120"),
+])
+def test_a_card_or_social_security_number_is_caught_whatever_separates_its_groups(action, resource):
+    got = srv._gate_assessment(action, resource)
+    assert got["verdict"] == "ESCALATE", (action, resource, got)
+
+
+@pytest.mark.parametrize("resource", ["docs/2024/01/15", "notes-1.2.3.md", "docs/2024-01-15", "page 2024", "chapter-12.txt", "./readme.md", "docs/./readme.md"])
+def test_dates_and_versions_are_not_mistaken_for_identifiers(resource):
+    assert verdict("read_file", resource) == "ALLOW", resource
+
+
+# ---- a host followed only by a separator is still a host; my own rule-by-rule gaps ---------------------------------------
+@pytest.mark.parametrize("resource", ["docs.rs/", "api.md/.", "site.cc//", "12345678.87654321.data-api.md/", "docs.rs/./", "blog.app/"])
+def test_a_host_followed_only_by_a_separator_is_still_a_host(resource):
+    for action in ("get_page", "read_file"):
+        got = srv._gate_assessment(action, resource)
+        assert got["verdict"] == "ESCALATE" and "network address" in got["reasons"][0], (action, resource, got)
+
+
+@pytest.mark.parametrize("resource", ["docs\\readme.md", "docs\\..\\..\\readme.md", "notes\\readme.md"])
+def test_a_backslash_in_the_resource_escalates_on_the_character_rule(resource):
+    got = srv._gate_assessment("read_file", resource)
+    assert got["verdict"] == "ESCALATE" and "characters other than" in got["reasons"][0], (resource, got)
+
+
+@pytest.mark.parametrize("action", ["get user 078-05-1120", "get user 078 05 1120", "get_user_123456789", "get-user-4111-1111-1111-1111"])
+def test_an_identifier_shaped_number_in_the_action_escalates(action):
+    got = srv._gate_assessment(action, "docs")
+    assert got["verdict"] == "ESCALATE" and "looks like a card" in got["reasons"][0], (action, got)
+
+
+@pytest.mark.parametrize("resource", ["users 123456789", "users 1234567890", "users/987654321.md"])
+def test_a_run_of_nine_digits_escalates_and_eight_does_not(resource):
+    assert srv._gate_assessment("get_user", resource)["verdict"] == "ESCALATE", resource
+    assert srv._gate_assessment("get_user", "users 12345678")["verdict"] == "ALLOW"
+
+
+@pytest.mark.parametrize("resource", ["10.300/readme.md", "10.999/docs", "192.168.1000/readme.md"])
+def test_a_short_dotted_number_with_an_oversized_last_part_is_an_address(resource):
+    got = srv._gate_assessment("get_page", resource)
+    assert got["verdict"] == "ESCALATE" and "network address" in got["reasons"][0], (resource, got)

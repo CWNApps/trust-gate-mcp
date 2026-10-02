@@ -49,7 +49,7 @@ That shows a post-quantum signature is present and valid, not whose key made it.
 |------|--------------|------|
 | `mint_receipt_for_record_change` | Receipt for one CRM record change; values hashed | Low |
 | `audit_my_agent_inventory` | Rank a caller-supplied tool list by worst-regret. **Read-only, mints no receipt** | Low |
-| `mint_action_receipt` | Receipt for any consequential action; attestation values are caller claims, signed not verified; gate-looking decisions refused (best effort, check `issuer_tool`) | Low |
+| `mint_action_receipt` | Receipt for any consequential action; attestation values are caller claims, signed not verified; gate-looking decisions refused (best effort; to accept a gate verdict, pin the signer and check `issuer_tool`) | Low |
 | `verify_receipt` | Offline verification from the certificate alone; refuses unsigned receipts; optional `expected_kid` pin (counts only when that key's own Ed25519 signature verifies) | Low |
 | `gate_decision` | Two-phase PREVIEW → COMMIT gate: ALLOW / DENY / ESCALATE verdict, signed receipt, GRANTED permit only on ALLOW. Applies only to actions routed through it | Medium |
 | `check_egress` | Flag sensitive markers: NO_MARKERS_FOUND/INTERNAL/CONFIDENTIAL/RESTRICTED; credential-shaped values and personal identifiers are RESTRICTED and set `blocked` (the tool cannot block anything itself; NO_MARKERS_FOUND is not clearance) | Medium |

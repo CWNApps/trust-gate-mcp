@@ -250,7 +250,7 @@ def test_the_drill_does_not_pass_the_signing_step_when_this_host_cannot_sign(mon
     assert "configured" in out["steps"][1]["description"] and "not contacted" in out["steps"][1]["description"]
 
 
-# ---- notes, drill and verify details (final round) ----------------------------------------------------------------
+# ---- notes, drill and verify details ----------------------------------------------------------------
 @needs_oao
 def test_the_note_says_so_when_there_is_no_ed25519_signature(monkeypatch):
     real = srv._oao_receipt.mint_receipt

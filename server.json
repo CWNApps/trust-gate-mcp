@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.CWNApps/trust-gate-mcp",
   "title": "Trust Gate",
-  "description": "Tamper-evident receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65. Offline integrity check.",
+  "description": "Signed receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65.",
   "repository": {
     "url": "https://github.com/CWNApps/trust-gate-mcp",
     "source": "github"

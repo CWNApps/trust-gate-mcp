@@ -335,6 +335,7 @@ _RESOURCE_VOCABULARY = (_READ_NOUNS - _RESOURCE_EXCLUDED_WORDS) | _RESOURCE_EXTR
 def _identifier_shaped_number(text: str) -> bool:
     """A number that is probably an identifier (a card, a social security number, an address written as one
     integer): such a value is signed into the receipt in clear text and is not a name."""
+    text = re.sub(r"[^0-9A-Za-z]+", "-", text)      # whatever separates the groups ("/", "_", ".", " ")
     return bool(_SSN_SHAPE.search(text) or _has_card_number(text) or re.search(r"[0-9]{9,}", text))
 
 
@@ -401,8 +402,10 @@ def _resource_is_ordinary(resource: str) -> bool:
     real = [seg for seg in segments if seg not in ("", ".")]
     if not real:
         return True
-    if len(real) > 1 and _HOST_NAME.fullmatch(real[0].rstrip(".")):
-        return False  # "example.com/x": a host, then a path
+    # Anything after the first real segment, even only a separator, makes it "a name, then a path":
+    # "example.com/x" and "docs.rs/" both read as a host to a fetch tool.
+    if len(segments) > segments.index(real[0]) + 1 and _HOST_NAME.fullmatch(real[0].rstrip(".")):
+        return False
     last = real[-1]
     if "." not in last:
         return True
@@ -763,7 +766,7 @@ _RESERVED_DECISION_CANON = frozenset({
 })
 # A decision that merely CONTAINS one of these reads as a verdict too ("GATE_ALLOW", "ALLOW_ALL",
 # "ACCESS_GRANTED"). This is a best-effort convenience, not the trust boundary: the boundary is the
-# signed `issuer_tool` field, which a consumer must check (see README).
+# signed `issuer_tool` field, checked together with a pinned signer (see README).
 _RESERVED_DECISION_FRAGMENTS = ("allow", "deny", "denied", "escalat", "grant", "permit", "withheld",
                                 "notissued", "committed", "approved", "approve")
 

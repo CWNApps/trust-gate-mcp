@@ -29,9 +29,7 @@ jobs:
   test:
     name: Test before publishing
     runs-on: ubuntu-latest
-    # A PyPI version can never be replaced, only yanked, so the suite gates the
-    # build. This repo shipped for a month with an uncollectable suite because
-    # nothing ever ran it in CI -- that is exactly what this job prevents.
+    # A PyPI version can never be replaced, only yanked, so the suite gates the build.
     if: github.repository_owner == 'CWNApps'
     permissions:
       contents: read

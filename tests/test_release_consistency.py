@@ -7,7 +7,6 @@ security team can quote back. These checks fail the build when the text drifts f
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import pathlib
 import re
@@ -39,6 +38,10 @@ def test_every_place_that_states_the_version_agrees():
     assert json.loads(_text("server.json"))["version"] == v
     assert json.loads(_text("glama.json"))["version"] == v
     assert f"## {v} " in _text("CHANGELOG.md")
+
+
+def test_the_registry_description_fits_the_registry_limit():
+    assert len(json.loads(_text("server.json"))["description"]) <= 100
 
 
 def test_the_registry_entry_states_the_real_tool_count():
