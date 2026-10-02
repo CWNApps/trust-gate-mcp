@@ -458,13 +458,23 @@ def test_length_caps_are_exact():
 
 def test_context_must_be_an_object_and_deeply_nested_context_is_refused_not_a_crash():
     assert "error" in srv.tool_gate_decision("get", "x", ["not", "a", "dict"], phase="PREVIEW")
-    nested = {}
-    cur = nested
-    for _ in range(5000):
-        cur["a"] = {}
-        cur = cur["a"]
-    out = srv.tool_gate_decision("get", "x", nested, phase="PREVIEW")
+
+    def nest(depth):
+        top = cur = {}
+        for _ in range(depth):
+            cur["a"] = {}
+            cur = cur["a"]
+        return top
+
+    # The interpreter's own recursion limit differs between Python releases and platforms, so a
+    # depth near it can be serialised on one build and refused on another. 100,000 levels is refused
+    # on every build: by the recursion limit, or else by the 65,536-character cap (7 characters a level).
+    out = srv.tool_gate_decision("get", "x", nest(100000), phase="PREVIEW")
     assert "error" in out and "verdict" not in out
+    # At a depth that serialises to under the cap, the answer is either a refusal or a normal preview,
+    # never an exception.
+    out = srv.tool_gate_decision("get", "x", nest(5000), phase="PREVIEW")
+    assert "error" in out or out.get("phase") == "PREVIEW"
 
 
 def test_phase_and_preview_id_types_are_validated():
