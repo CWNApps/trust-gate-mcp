@@ -83,4 +83,4 @@ The volume mount on `/data/oao` is **required for production**: without it the s
 
 ## License
 
-Apache-2.0. Built on the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) primitive.
+Apache-2.0 (full text in `LICENSE`). Copyright 2026 Cyber Warrior Network. Built on the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) primitive.
