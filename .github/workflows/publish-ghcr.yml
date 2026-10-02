@@ -57,6 +57,9 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
         with:
           images: ghcr.io/cwnapps/trust-gate-mcp
+          # Set explicitly: without it the action copies the repository's About text into the image label.
+          labels: |
+            org.opencontainers.image.description=Signed receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65.
           tags: |
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
