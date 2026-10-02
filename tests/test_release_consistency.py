@@ -194,3 +194,12 @@ def test_the_sdist_contains_only_the_package_and_its_readme(tmp_path):
     assert "src/trust_gate_mcp/server.py" in names, names  # the archive really holds the package
     stray = [n for n in names if n not in SDIST_ROOT_FILES and not n.startswith("src/trust_gate_mcp/")]
     assert not stray, stray
+
+
+def test_the_container_image_description_is_set_explicitly_and_matches_the_registry_description():
+    # Without an explicit label the build copies the repository's About text into the image, which once
+    # still described a signature leg and a verification claim that this release withdrew.
+    workflow = _text(".github/workflows/publish-ghcr.yml")
+    m = re.search(r"^\s*org\.opencontainers\.image\.description=(.+)$", workflow, re.M)
+    assert m, "publish-ghcr.yml must set org.opencontainers.image.description"
+    assert m.group(1).strip() == json.loads(_text("server.json"))["description"]

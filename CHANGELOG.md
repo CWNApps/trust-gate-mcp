@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 -- 2026-09-29
+## 0.3.0 -- 2026-10-02 (prepared 2026-09-29)
 
 **SECURITY FIX: `gate_decision` now returns a real verdict, and ALLOW has to be earned.**
 

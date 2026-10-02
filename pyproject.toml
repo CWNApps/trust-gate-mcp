@@ -1,6 +1,7 @@
 [build-system]
-# hatchling 1.32 and later write Metadata-Version 2.5, which twine 6.1.0 (bundled in the pinned PyPI
-# publish action) rejects. 1.28 to 1.31 write 2.4. Raise this bound together with that action's pin.
+# hatchling 1.32 and later write Metadata-Version 2.5 (so did 1.30.0, which PyPI has yanked), which twine
+# 6.1.0 (bundled in the pinned PyPI publish action) rejects. The other 1.28 to 1.31 releases write 2.4.
+# Raise this bound together with that action's pin.
 requires = ["hatchling>=1.28,<1.32"]
 build-backend = "hatchling.build"
 
