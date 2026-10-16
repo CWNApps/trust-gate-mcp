@@ -156,7 +156,7 @@ def call(op: str, request: Any) -> Dict[str, Any]:
     if len(raw) > MAX_REQUEST_BYTES:
         return _refused(op, "request_too_large")
     headers = {"Authorization": "Bearer " + key, "X-CWN-Tenant-Id": tenant,
-               "Content-Type": "application/json", "Accept": "application/json"}
+               "Content-Type": "application/json", "Accept": "application/json", "Accept-Encoding": "identity"}
     try:
         with _client_factory(TIMEOUT_SECONDS) as client:
             with client.stream("POST", base + spec["path"], content=raw, headers=headers) as resp:
@@ -165,6 +165,11 @@ def call(op: str, request: Any) -> Dict[str, Any]:
                     return _unavailable(op, "surface_not_available")
                 if status == 429 or status >= 500:
                     return _unavailable(op, "service_unavailable")
+                # A compressed body could expand far past the cap inside one decoded chunk, so only identity is accepted
+                # (we asked for it); with identity, iter_bytes runs no decompressor, so the cap below bounds memory.
+                encoding = resp.headers.get("content-encoding", "").strip().lower()
+                if encoding not in ("", "identity"):
+                    return _unavailable(op, "response_encoding_refused")
                 # Read only up to the cap; the rest of a longer body is never read.
                 limit = MAX_RESPONSE_BYTES if status == 200 else MAX_ERROR_BODY_BYTES
                 chunks, size = [], 0

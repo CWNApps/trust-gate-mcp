@@ -162,3 +162,62 @@ def test_descriptions_say_the_server_version_must_serve_the_view():
     desc = {t["name"]: t["description"] for t in srv.describe_tools(srv.build_server())}
     for op in ALL_OPS:
         assert "UNAVAILABLE until" in desc[op] and "version" in desc[op]
+
+
+
+
+def _streamed(body, headers):
+    # stream= (not content=): httpx decodes a content= body eagerly inside the test, which would hide what the client does.
+    return httpx.Response(200, stream=httpx.ByteStream(body), headers=headers)
+
+
+def test_a_compressed_answer_is_refused_and_never_decompressed(configured, monkeypatch):
+    import gzip
+    import tracemalloc
+    bomb = gzip.compress(b"0" * (32 * 1024 * 1024))     # 32 MiB of zeros, ~32 KiB on the wire
+    seen = {}
+
+    def handler(request):
+        seen["accept_encoding"] = request.headers.get("accept-encoding")
+        return _streamed(bomb, {"Content-Encoding": "gzip", "Content-Type": "application/json"})
+
+    def factory(timeout):
+        return httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout, follow_redirects=False)
+
+    monkeypatch.setattr(api_ops, "_client_factory", factory)
+    tracemalloc.start()
+    try:
+        r = api_ops.call("replay_decision", {"x": 1})
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    _closed(r, "UNAVAILABLE")
+    assert r["reason"] == "response_encoding_refused"
+    assert seen["accept_encoding"] == "identity"
+    assert peak < 4 * 1024 * 1024, peak                 # nothing near the 32 MiB the body would expand to
+
+
+@pytest.mark.parametrize("enc", ["gzip", "br", "deflate", "zstd", "GZIP", " gzip ", "gzip, identity", "x-unknown"])
+def test_every_non_identity_encoding_is_refused(configured, monkeypatch, enc):
+    def factory(timeout):
+        return httpx.Client(transport=httpx.MockTransport(
+            lambda request: _streamed(b"{}", {"Content-Encoding": enc})), timeout=timeout)
+
+    monkeypatch.setattr(api_ops, "_client_factory", factory)
+    r = api_ops.call("replay_decision", {"x": 1})
+    _closed(r, "UNAVAILABLE")
+    assert r["reason"] == "response_encoding_refused"
+
+
+@pytest.mark.parametrize("enc", [None, "identity", " Identity "])
+def test_an_identity_answer_is_not_refused_for_its_encoding(configured, monkeypatch, enc):
+    headers = {"Content-Type": "application/json"}
+    if enc is not None:
+        headers["Content-Encoding"] = enc
+
+    def factory(timeout):
+        return httpx.Client(transport=httpx.MockTransport(lambda request: _streamed(b'{"ok": true}', headers)), timeout=timeout)
+
+    monkeypatch.setattr(api_ops, "_client_factory", factory)
+    r = api_ops.call("replay_decision", {"x": 1})
+    assert r.get("reason") != "response_encoding_refused"
