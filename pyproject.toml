@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trust-gate-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "MCP server for Trust Gate — tamper-evident receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65. Offline integrity check."
 readme = "README.md"
 license = "Apache-2.0"
@@ -30,6 +30,8 @@ dependencies = [
     # With a bare >=1.7.0 a fresh install resolves to 2.x and the server cannot start
     # at all. Lift this only together with migrating build_server() to the 2.x API.
     "mcp>=1.12,<2",
+    # Used only by the optional read-only API views (api_ops.py).
+    "httpx>=0.27",
     # The signing primitive every mint/verify tool funnels through. Was previously
     # undeclared, which made a plain `pip install trust-gate-mcp` install a server
     # whose minting tools all returned "openagentontology_unavailable". The [pq]

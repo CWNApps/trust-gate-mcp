@@ -57,7 +57,7 @@ def test_the_server_card_is_built_from_the_running_server():
     card = srv.build_server_card(server)
     assert card["version"] == srv.SERVER_VERSION
     assert [t["name"] for t in card["tools"]] == [t["name"] for t in srv.describe_tools(server)]
-    assert len(card["tools"]) == 7
+    assert len(card["tools"]) == 16
     assert all(t["description"] for t in card["tools"])
     assert f"{len(card['tools'])} tools" in card["description"]
     assert "gate_decision" in {t["name"] for t in card["tools"]}

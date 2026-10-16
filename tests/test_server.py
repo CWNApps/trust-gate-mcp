@@ -9,7 +9,7 @@ mcp package is only needed to actually run the server, not to unit-test the tool
   3. Tamper detection: a one-field edit to the action breaks verification.
   4. The audit tool refuses to claim auto-discovery -- the honest-scope note is in every
      response and the receipt commits to the caller-provided input.
-  5. The build_server() factory wires all seven tools when the mcp package is installed.
+  5. The build_server() factory wires all sixteen tools when the mcp package is installed.
 """
 from __future__ import annotations
 
@@ -143,7 +143,7 @@ def test_action_receipt_mints_verifies_and_catches_tamper():
 
 
 # ---- the server factory wires all seven tools ----------------------------------------
-def test_build_server_wires_all_seven_tools():
+def test_build_server_wires_all_sixteen_tools():
     try:
         import mcp  # noqa: F401
     except ImportError:
@@ -158,5 +158,8 @@ def test_build_server_wires_all_seven_tools():
         "mint_receipt_for_record_change", "audit_my_agent_inventory",
         "mint_action_receipt", "verify_receipt",
         "gate_decision", "check_egress", "run_exit_drill",
+        "inspect_oversight_case", "propose_role_question", "get_intervention_evidence",
+        "compare_qualification_change", "export_acceptance_pack", "get_receipt_evidence",
+        "get_decision_evidence", "replay_decision", "propose_requalification",
     }
     assert set(tool_names) == expected, f"tool set changed; got {sorted(tool_names)}"

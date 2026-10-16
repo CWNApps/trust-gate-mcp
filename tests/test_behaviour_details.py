@@ -263,7 +263,7 @@ def test_the_landing_page_states_the_real_tool_count(monkeypatch):
     http = importlib.import_module("server_http")
     with TestClient(http.build_app(), client=("8.8.4.4", 40000)) as client:
         page = client.get("/", headers={"accept": "text/html"}).text
-    assert "7 tools" in page and "seven" not in page.lower().replace("seven tools", "")
+    assert "16 tools" in page and "seven" not in page.lower().replace("seven tools", "")
 
 
 @needs_oao

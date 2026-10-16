@@ -114,7 +114,7 @@ def test_the_server_card_names_the_running_version_and_tools(http, monkeypatch):
     with TestClient(http.build_app(), client=("8.8.4.4", 40000)) as client:
         card = client.get("/.well-known/mcp/server-card.json").json()
     assert card["version"] == trust_gate_mcp.__version__
-    assert len(card["tools"]) == 7 and "gate_decision" in {t["name"] for t in card["tools"]}
+    assert len(card["tools"]) == 16 and "gate_decision" in {t["name"] for t in card["tools"]}
     assert str(len(card["tools"])) in card["description"]
 
 
