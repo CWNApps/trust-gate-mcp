@@ -1,6 +1,6 @@
 """Trust Gate MCP server -- hybrid-signed agent-decision receipts as MCP tools.
 
-One MCP server, seven tools, one shared signing primitive (the open-source
+One MCP server, sixteen tools (seven local, nine optional read-only API views), one shared signing primitive (the open-source
 OpenAgentOntology `mint_receipt`: Ed25519 + ML-DSA-65).
 
   mint_receipt_for_record_change(record)  -- a CRM record changed; mint a per-change receipt
@@ -12,6 +12,9 @@ OpenAgentOntology `mint_receipt`: Ed25519 + ML-DSA-65).
                                              ALLOW / DENY / ESCALATE verdict + signed receipt
   check_egress(destination, data_sample) -- egress data-classification check with receipt
   run_exit_drill()                       -- vendor exit readiness check with receipt
+
+Nine more tools are read-only views over a Trust Gate API (api_ops.py). They are off until
+TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID are set; a missing setting or a 404 is UNAVAILABLE.
 
 Honesty constraints (encoded, not optional):
 
@@ -46,7 +49,7 @@ from typing import Any, Dict, List, Optional
 
 # One source of truth for the version a running server reports (the static server card, the MCP
 # registry entry and pyproject.toml must all say this; tests/test_release_consistency.py checks).
-SERVER_VERSION = "0.3.0"
+SERVER_VERSION = "0.4.0"
 
 # ---- the receipt primitive (one source of truth, hybrid-signed by default) ---------
 # If the package is not installed the tools return a clear, structured error rather than
@@ -1458,7 +1461,7 @@ def tool_run_exit_drill() -> Dict[str, Any]:
 # ---- MCP server wiring (FastMCP -- the high-level API in the modelcontextprotocol Python SDK) -
 
 def build_server():
-    """Build the FastMCP server with all seven tools. Importable so tests don't need stdio."""
+    """Build the FastMCP server with all sixteen tools. Importable so tests don't need stdio."""
     from mcp.server.fastmcp import FastMCP  # imported lazily so tests can run without mcp
     from mcp.server.transport_security import TransportSecuritySettings
 
@@ -1573,7 +1576,41 @@ def build_server():
     def run_exit_drill() -> Dict[str, Any]:
         return tool_run_exit_drill()
 
+    _register_api_tools(mcp)
+
     return mcp
+
+
+_RO = (" Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, "
+       "TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an "
+       "argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is "
+       "UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns "
+       "UNAVAILABLE until then. A mapping or readout is not a compliance finding.")
+_API_TOOLS = (
+    ("inspect_oversight_case", "Readiness report for one oversight case, computed from the records you supply." + _RO),
+    ("propose_role_question", "Questions routed to a role for one oversight case, from the records and source lookups you supply. "
+     "It proposes; it never asks anyone." + _RO),
+    ("get_intervention_evidence", "Evidence for whether an intervention could be shown to have taken effect, from the records you supply." + _RO),
+    ("compare_qualification_change", "Status of each proposed retest after a change (current, not current or unbound), from the "
+     "proposal inputs and results you supply." + _RO),
+    ("export_acceptance_pack", "Acceptance-pack export for one or more cases, optionally mapped to one control id and version you name." + _RO),
+    ("get_receipt_evidence", "Evidence view of one receipt you supply, with what the service could and could not check." + _RO),
+    ("get_decision_evidence", "Evidence view, verdict and open questions for one decision and the facts you supply." + _RO),
+    ("replay_decision", "Replay of a decision's evidence path over the records you supply. It replays records; it executes nothing." + _RO),
+    ("propose_requalification", "Impact and a requalification PROPOSAL for a change, over the graph you supply. It never runs a retest." + _RO),
+)
+
+
+def _register_api_tools(mcp) -> None:
+    """The nine read-only API views. Each takes one object, `request`, forwarded as the call body."""
+    try:
+        from . import api_ops
+    except ImportError:  # flat layout (container image)
+        import api_ops
+    for name, description in _API_TOOLS:
+        fn = api_ops.make_tool(name)
+        fn.__annotations__ = {"request": Dict[str, Any], "return": Dict[str, Any]}
+        mcp.tool(name=name, description=description)(fn)
 
 
 def describe_tools(mcp) -> List[Dict[str, str]]:

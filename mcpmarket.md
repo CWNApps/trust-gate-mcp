@@ -43,7 +43,7 @@ PQ-required verify is **on by default** and demands at least one verified post-q
 That shows a post-quantum signature is present and valid, not whose key made it. The default install satisfies the check; it does not make the pure-Python backend production-grade.
 `run_exit_drill` reports which backend is active.
 
-## Tools (7)
+## Tools (16)
 
 | Tool | What it does | Risk |
 |------|--------------|------|
@@ -54,6 +54,8 @@ That shows a post-quantum signature is present and valid, not whose key made it.
 | `gate_decision` | Two-phase PREVIEW → COMMIT gate: ALLOW / DENY / ESCALATE verdict, signed receipt, GRANTED permit only on ALLOW. Applies only to actions routed through it | Medium |
 | `check_egress` | Flag sensitive markers: NO_MARKERS_FOUND/INTERNAL/CONFIDENTIAL/RESTRICTED; credential-shaped values and personal identifiers are RESTRICTED and set `blocked` (the tool cannot block anything itself; NO_MARKERS_FOUND is not clearance) | Medium |
 | `run_exit_drill` | Vendor exit-readiness check. Informational; it signs one receipt, which creates the signing key on a host that has none yet | Low |
+
+The nine tools after `run_exit_drill` in the server's list are optional read-only API views (off until `TRUST_GATE_API_URL`, `TRUST_GATE_API_KEY` and `TRUST_GATE_TENANT_ID` are set; `UNAVAILABLE` otherwise; a readout is not a compliance finding; they need a Trust Gate API version that serves each view and return `UNAVAILABLE` until then): `inspect_oversight_case`, `propose_role_question`, `get_intervention_evidence`, `compare_qualification_change`, `export_acceptance_pack`, `get_receipt_evidence`, `get_decision_evidence`, `replay_decision`, `propose_requalification`.
 
 `audit_my_agent_inventory` ranks only what the caller passes in. MCP does not let a server
 enumerate its host's other servers, and the tool says so in its own output rather than

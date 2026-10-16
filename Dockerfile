@@ -13,10 +13,11 @@ RUN python -m pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir \
         "mcp>=1.12,<2" \
         "openagentontology[pq]>=0.2,<0.3" \
+        "httpx>=0.27" \
         "uvicorn>=0.30" \
         "starlette>=0.37"
 
-COPY src/trust_gate_mcp/server.py src/trust_gate_mcp/server_http.py src/trust_gate_mcp/bootstrap.py src/trust_gate_mcp/rate_limit.py src/trust_gate_mcp/auth.py /app/
+COPY src/trust_gate_mcp/server.py src/trust_gate_mcp/server_http.py src/trust_gate_mcp/bootstrap.py src/trust_gate_mcp/rate_limit.py src/trust_gate_mcp/auth.py src/trust_gate_mcp/api_ops.py /app/
 
 # Persistent state directory for the signing keys AND key_metadata.json. Mount a volume here at
 # deploy time -- without it the key changes on every container restart: receipts signed earlier still

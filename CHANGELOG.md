@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 -- unreleased
+
+**Nine optional, read-only API views.** `inspect_oversight_case`, `propose_role_question`, `get_intervention_evidence`,
+`compare_qualification_change`, `export_acceptance_pack`, `get_receipt_evidence`, `get_decision_evidence`, `replay_decision`
+and `propose_requalification` show what a Trust Gate API computes from records the caller supplies. They are off until
+`TRUST_GATE_API_URL`, `TRUST_GATE_API_KEY` and `TRUST_GATE_TENANT_ID` are set. Read-only: nothing is written, signed,
+executed or authorized. The tenant is configuration, never an argument (a request that names one is refused). A missing
+setting, a 404, a rate limit, a server error or a malformed answer returns a typed `UNAVAILABLE`, never made-up data. The
+credential is never logged or returned. A mapping or readout is not a compliance finding. The seven existing tools are
+unchanged, and the package now declares `httpx` as a dependency (it was already installed with `mcp`). The server
+makes no outbound call unless those three settings are present. The views need a Trust Gate API version that serves them and
+return `UNAVAILABLE` until then. The client ignores proxy environment variables, never follows redirects, reads error
+bodies up to 4 KiB and answers up to 1 MiB, refuses a tenant key at any depth that names another tenant, and treats a
+null expected field as `UNAVAILABLE` (`missing_field`).
+
 ## 0.3.0 -- 2026-10-02 (prepared 2026-09-29)
 
 **SECURITY FIX: `gate_decision` now returns a real verdict, and ALLOW has to be earned.**

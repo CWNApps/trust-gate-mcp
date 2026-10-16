@@ -822,10 +822,13 @@ def mcp_server():
     return srv.build_server()
 
 
-def test_all_seven_tools_are_registered(mcp_server):
+def test_all_sixteen_tools_are_registered(mcp_server):
     names = {t["name"] for t in srv.describe_tools(mcp_server)}
     assert names == {"mint_receipt_for_record_change", "audit_my_agent_inventory", "mint_action_receipt",
-                     "verify_receipt", "gate_decision", "check_egress", "run_exit_drill"}
+                     "verify_receipt", "gate_decision", "check_egress", "run_exit_drill",
+                     "inspect_oversight_case", "propose_role_question", "get_intervention_evidence",
+                     "compare_qualification_change", "export_acceptance_pack", "get_receipt_evidence",
+                     "get_decision_evidence", "replay_decision", "propose_requalification"}
 
 
 def test_no_tool_description_claims_a_receipt_the_tool_does_not_mint(mcp_server):

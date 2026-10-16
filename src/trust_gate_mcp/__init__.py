@@ -5,7 +5,7 @@ primitive (Ed25519 + ML-DSA-65). No hosted backend
 dependency. A receipt's integrity verifies offline from the certificate alone; who signed it
 needs the signer's kid pinned out of band.
 
-Seven tools:
+Sixteen tools (seven local; nine optional read-only API views, see api_ops.py):
 
   gate_decision(action, resource, ...)  ALLOW / DENY / ESCALATE verdict + signed receipt
   mint_receipt_for_record_change(...)   tamper-evident per-change receipt for any CRM
@@ -18,7 +18,7 @@ Seven tools:
 No receipt. No trust.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from .server import build_server, main
 

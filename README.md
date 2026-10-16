@@ -2,7 +2,7 @@
 
 Tamper-evident receipts for consequential agent actions, as an MCP server, with a decision gate that returns ALLOW, DENY or ESCALATE.
 
-Seven tools, one shared signing primitive: the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`.
+Sixteen tools: seven local ones on one shared signing primitive, the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`, plus nine optional read-only views over a Trust Gate API (see "Read-only API views" below).
 
 **What actually gets signed depends on what you install** -- OAO detects its backend at import time, so this is worth stating plainly rather than advertising the best case:
 
@@ -23,6 +23,34 @@ PQ-required verify (the default) demands **at least one** verified post-quantum 
 | `check_egress` | Flags sensitive markers in a data sample (a finite list of keywords, SSN and card-number shapes, and common credential formats, including `NAME=value` assignments) as NO_MARKERS_FOUND / INTERNAL / CONFIDENTIAL / RESTRICTED. Credential-shaped values and personal identifiers are RESTRICTED and set `blocked: true`; credential keywords alone are CONFIDENTIAL. A harmless sample that looks like an assignment of a key or password can be flagged too. **It cannot block anything itself**: your code must read `blocked` and obey it. NO_MARKERS_FOUND is not clearance to send. Returns classification + retention info + receipt. |
 | `run_exit_drill` | Vendor exit readiness drill. Checks the local signing key (names the post-quantum backend and whether the hash-based leg is available) and that a local model endpoint is configured (Ollama; it is not contacted, and a remote host is not counted). Returns step-by-step results + receipt. Informational; it signs one receipt, which creates the signing key on a host that has none yet. |
 
+## Read-only API views (optional, off by default)
+
+Nine tools show what a Trust Gate API computes from records YOU supply. They do nothing until you set
+`TRUST_GATE_API_URL` (https; http only for localhost), `TRUST_GATE_API_KEY` (a bearer credential issued for one tenant) and
+`TRUST_GATE_TENANT_ID`. The seven local tools above need none of these and never call out.
+
+| Tool | Shows |
+|---|---|
+| `inspect_oversight_case` | Readiness report for one oversight case |
+| `propose_role_question` | Questions routed to a role for a case. It proposes; it asks no one |
+| `get_intervention_evidence` | Evidence on whether an intervention could be shown to have taken effect |
+| `compare_qualification_change` | Status of each proposed retest after a change: current, not current or unbound |
+| `export_acceptance_pack` | Acceptance-pack export, optionally mapped to one control id and version you name |
+| `get_receipt_evidence` | Evidence view of one receipt, with what the service could and could not check |
+| `get_decision_evidence` | Evidence view, verdict and open questions for a decision and its facts |
+| `replay_decision` | Replay of a decision's evidence path over supplied records. It executes nothing |
+| `propose_requalification` | Impact and a requalification proposal. It never runs a retest |
+
+Each takes one object, `request`, forwarded as the call body. Rules every one follows:
+
+* **Read-only.** Nothing is written, signed, executed or authorized. The answer is built from the records you pass in; their claims are yours, not verified facts.
+* **The tenant is configuration.** `request` may not name a tenant at its top level, and a tenant key at any depth (`tenant`, `tenant_id`, `tenant-id`, `TenantId`, in any case) must equal `TRUST_GATE_TENANT_ID`, otherwise the request is refused before any call. Only `TRUST_GATE_TENANT_ID` is ever sent as the tenant.
+* **Fail closed.** A missing setting, a 404 (the surface is off or not deployed), a rate limit, a server error, a transport error or an answer of the wrong shape returns `status: "UNAVAILABLE"` with a `reason`. A refusal from the API returns `REFUSED` with its short `code`. Data is never filled in or defaulted.
+* **The credential is never logged or returned**, and no exception text is passed on.
+* **A mapping or readout is not a compliance finding.** Every result says so.
+* **Version match.** The receipt, decision, replay, propose and requalification views (`get_receipt_evidence`, `get_decision_evidence`, `replay_decision`, `propose_requalification`, `compare_qualification_change`) and the case, question, evidence and pack views need a Trust Gate API version that serves them. Against an older server, or one with the surface switched off, they return `UNAVAILABLE` (`surface_not_available`) until it does.
+* Requests are capped at 64 KiB; answers are read up to 1 MiB (error bodies up to 4 KiB) and never further. 10 second timeout, no redirects, and proxy environment variables are ignored.
+
 ## What the gate does and does not do
 
 * **Scope.** It applies only to actions your code routes through `gate_decision`. It does not observe, intercept or block anything an agent does, and it does not check afterward whether an action happened. Your code (a hook, a wrapper) must ask first and must obey the answer.
@@ -35,7 +63,7 @@ PQ-required verify (the default) demands **at least one** verified post-quantum 
 * **No permit without a receipt this server would accept.** COMMIT issues `GRANTED` only if the receipt was minted and signed, and verifies under this server's own policy (in PQ-required mode that includes a valid post-quantum signature).
 * **Action and resource are recorded in clear text** in the signed receipt. Do not put secrets or personal data in them.
 * **A receipt is evidence of a verdict, not a log entry.** `atom_id` is derived from the content (40 bits of the evidence hash), so identical decisions share one and different decisions can too; key on `evidence_hash` and `signed_at`. The server keeps no log of the receipts it signs: store the ones you need. There is no replay or freshness check: compare `evidence.ontology.action` and `resource` with what you are about to do.
-* **0.2.1 returned `GRANTED` for every action.** Upgrade to 0.3.0. See the [changelog](./CHANGELOG.md).
+* **0.2.1 returned `GRANTED` for every action.** Upgrade to 0.3.0 or later. See the [changelog](./CHANGELOG.md).
 
 ## What a valid receipt proves
 
