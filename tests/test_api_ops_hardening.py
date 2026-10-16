@@ -221,3 +221,27 @@ def test_an_identity_answer_is_not_refused_for_its_encoding(configured, monkeypa
     monkeypatch.setattr(api_ops, "_client_factory", factory)
     r = api_ops.call("replay_decision", {"x": 1})
     assert r.get("reason") != "response_encoding_refused"
+
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 422])
+def test_a_compressed_error_answer_is_refused_too(configured, monkeypatch, status):
+    # the 4 KiB error-body path must not decompress either: one decoded chunk would be the whole bomb
+    import gzip
+    import tracemalloc
+    bomb = gzip.compress(b"0" * (32 * 1024 * 1024))
+
+    def factory(timeout):
+        return httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(
+            status, stream=httpx.ByteStream(bomb), headers={"Content-Encoding": "gzip"})), timeout=timeout)
+
+    monkeypatch.setattr(api_ops, "_client_factory", factory)
+    tracemalloc.start()
+    try:
+        r = api_ops.call("replay_decision", {"x": 1})
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    _closed(r, "UNAVAILABLE")
+    assert r["reason"] == "response_encoding_refused"
+    assert peak < 4 * 1024 * 1024, peak
