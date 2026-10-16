@@ -44,11 +44,12 @@ Nine tools show what a Trust Gate API computes from records YOU supply. They do 
 Each takes one object, `request`, forwarded as the call body. Rules every one follows:
 
 * **Read-only.** Nothing is written, signed, executed or authorized. The answer is built from the records you pass in; their claims are yours, not verified facts.
-* **The tenant is configuration.** `request` may not name a tenant (it is refused); only `TRUST_GATE_TENANT_ID` is ever sent.
+* **The tenant is configuration.** `request` may not name a tenant at its top level, and a tenant key at any depth (`tenant`, `tenant_id`, `tenant-id`, `TenantId`, in any case) must equal `TRUST_GATE_TENANT_ID`, otherwise the request is refused before any call. Only `TRUST_GATE_TENANT_ID` is ever sent as the tenant.
 * **Fail closed.** A missing setting, a 404 (the surface is off or not deployed), a rate limit, a server error, a transport error or an answer of the wrong shape returns `status: "UNAVAILABLE"` with a `reason`. A refusal from the API returns `REFUSED` with its short `code`. Data is never filled in or defaulted.
 * **The credential is never logged or returned**, and no exception text is passed on.
 * **A mapping or readout is not a compliance finding.** Every result says so.
-* Requests are capped at 64 KiB and answers at 1 MiB, with a 10 second timeout and no redirects.
+* **Version match.** The receipt, decision, replay, propose and requalification views (`get_receipt_evidence`, `get_decision_evidence`, `replay_decision`, `propose_requalification`, `compare_qualification_change`) and the case, question, evidence and pack views need a Trust Gate API version that serves them. Against an older server, or one with the surface switched off, they return `UNAVAILABLE` (`surface_not_available`) until it does.
+* Requests are capped at 64 KiB; answers are read up to 1 MiB (error bodies up to 4 KiB) and never further. 10 second timeout, no redirects, and proxy environment variables are ignored.
 
 ## What the gate does and does not do
 

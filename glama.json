@@ -163,7 +163,7 @@
     },
     {
       "name": "inspect_oversight_case",
-      "description": "Readiness report for one oversight case, computed from the records you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Readiness report for one oversight case, computed from the records you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -171,7 +171,7 @@
     },
     {
       "name": "propose_role_question",
-      "description": "Questions routed to a role for one oversight case, from the records and source lookups you supply. It proposes; it never asks anyone. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Questions routed to a role for one oversight case, from the records and source lookups you supply. It proposes; it never asks anyone. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -179,7 +179,7 @@
     },
     {
       "name": "get_intervention_evidence",
-      "description": "Evidence for whether an intervention could be shown to have taken effect, from the records you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Evidence for whether an intervention could be shown to have taken effect, from the records you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -187,7 +187,7 @@
     },
     {
       "name": "compare_qualification_change",
-      "description": "Status of each proposed retest after a change (current, not current or unbound), from the proposal inputs and results you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Status of each proposed retest after a change (current, not current or unbound), from the proposal inputs and results you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -195,7 +195,7 @@
     },
     {
       "name": "export_acceptance_pack",
-      "description": "Acceptance-pack export for one or more cases, optionally mapped to one control id and version you name. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Acceptance-pack export for one or more cases, optionally mapped to one control id and version you name. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -203,7 +203,7 @@
     },
     {
       "name": "get_receipt_evidence",
-      "description": "Evidence view of one receipt you supply, with what the service could and could not check. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Evidence view of one receipt you supply, with what the service could and could not check. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -211,7 +211,7 @@
     },
     {
       "name": "get_decision_evidence",
-      "description": "Evidence view, verdict and open questions for one decision and the facts you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Evidence view, verdict and open questions for one decision and the facts you supply. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -219,7 +219,7 @@
     },
     {
       "name": "replay_decision",
-      "description": "Replay of a decision's evidence path over the records you supply. It replays records; it executes nothing. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Replay of a decision's evidence path over the records you supply. It replays records; it executes nothing. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"
@@ -227,7 +227,7 @@
     },
     {
       "name": "propose_requalification",
-      "description": "Impact and a requalification PROPOSAL for a change, over the graph you supply. It never runs a retest. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.",
+      "description": "Impact and a requalification PROPOSAL for a change, over the graph you supply. It never runs a retest. Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns UNAVAILABLE until then. A mapping or readout is not a compliance finding.",
       "riskLevel": "low",
       "arguments": {
         "request": "One JSON object of the records to check; the tenant is never an argument"

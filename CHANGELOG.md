@@ -10,7 +10,10 @@ executed or authorized. The tenant is configuration, never an argument (a reques
 setting, a 404, a rate limit, a server error or a malformed answer returns a typed `UNAVAILABLE`, never made-up data. The
 credential is never logged or returned. A mapping or readout is not a compliance finding. The seven existing tools are
 unchanged, and the package now declares `httpx` as a dependency (it was already installed with `mcp`). The server
-makes no outbound call unless those three settings are present.
+makes no outbound call unless those three settings are present. The views need a Trust Gate API version that serves them and
+return `UNAVAILABLE` until then. The client ignores proxy environment variables, never follows redirects, reads error
+bodies up to 4 KiB and answers up to 1 MiB, refuses a tenant key at any depth that names another tenant, and treats a
+null expected field as `UNAVAILABLE` (`missing_field`).
 
 ## 0.3.0 -- 2026-10-02 (prepared 2026-09-29)
 

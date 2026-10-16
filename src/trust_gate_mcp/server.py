@@ -1584,7 +1584,8 @@ def build_server():
 _RO = (" Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, "
        "TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an "
        "argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is "
-       "UNAVAILABLE, never made-up data). A mapping or readout is not a compliance finding.")
+       "UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns "
+       "UNAVAILABLE until then. A mapping or readout is not a compliance finding.")
 _API_TOOLS = (
     ("inspect_oversight_case", "Readiness report for one oversight case, computed from the records you supply." + _RO),
     ("propose_role_question", "Questions routed to a role for one oversight case, from the records and source lookups you supply. "

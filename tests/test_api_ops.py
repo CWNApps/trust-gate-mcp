@@ -110,7 +110,15 @@ def test_an_answer_missing_the_expected_field_is_unavailable_not_empty(configure
     for op in ("inspect_oversight_case", "get_intervention_evidence"):
         r = api_ops.call(op, {"x": 1})
         _assert_closed(r)
-        assert r["reason"] == "response_wrong_shape"
+        assert r["reason"] == "missing_field"
+
+
+@pytest.mark.parametrize("op,field", [("inspect_oversight_case", "report"), ("get_intervention_evidence", "pause")])
+def test_a_200_whose_expected_field_is_null_is_unavailable_not_ok(configured, transport, op, field):
+    transport.set(lambda request: httpx.Response(200, json={field: None, "status": "OK"}))
+    r = api_ops.call(op, {"x": 1})
+    _assert_closed(r)
+    assert r["reason"] == "missing_field"
 
 
 def test_an_oversized_answer_is_unavailable(configured, transport):

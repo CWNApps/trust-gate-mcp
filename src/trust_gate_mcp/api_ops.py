@@ -35,7 +35,10 @@ TIMEOUT_SECONDS = 10.0
 
 _TENANT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]{0,63}$")
 _CODE_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
-_TENANT_KEYS = ("tenant_id", "tenant", "tenantId")
+_TENANT_KEY_NORMS = ("tenant", "tenantid")   # a key, lower-cased with "-" and "_" removed, that names a tenant
+MAX_ERROR_BODY_BYTES = 4096
+MAX_DEPTH = 64
+MAX_NODES = 200_000
 _LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 # One row per tool: (path, send the configured tenant in the body, response field to return or None for the whole answer).
@@ -57,7 +60,9 @@ OPERATIONS: Dict[str, Dict[str, Any]] = {
 def _client_factory(timeout: float):
     """The HTTP client. Tests replace this with one on a mocked transport."""
     import httpx
-    return httpx.Client(timeout=timeout, follow_redirects=False)
+    # trust_env=False: never route through, or take settings from, proxy or netrc environment variables. A proxy
+    # would carry the bearer credential in clear over plain http to localhost.
+    return httpx.Client(timeout=timeout, follow_redirects=False, trust_env=False)
 
 
 def _unavailable(op: str, reason: str) -> Dict[str, Any]:
@@ -88,10 +93,35 @@ def _config():
     return (base.rstrip("/"), key, tenant), None
 
 
-def _code_from(resp) -> Optional[str]:
-    """A short error code from an error body, or None. Never free text."""
+def _tenant_problem(request: Any, tenant: str) -> Optional[str]:
+    """None if the request names no tenant but the configured one. Keys are matched at any depth, in any case, with or
+    without - or _ (tenant_id, TenantId, tenant-id, TENANT ...). The top level may name none (the tenant is injected);
+    a nested record may carry its own owner only when it equals the configured tenant. Iterative, so depth cannot crash it."""
+    stack = [(request, 0)]
+    seen = 0
+    while stack:
+        node, depth = stack.pop()
+        seen += 1
+        if seen > MAX_NODES or depth > MAX_DEPTH:
+            return "request_too_deeply_nested"
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(k, str) and k.lower().replace("-", "").replace("_", "") in _TENANT_KEY_NORMS:
+                    if depth == 0 or type(v) is not str or v != tenant:
+                        return "tenant_is_configuration_not_an_argument"
+                if isinstance(v, (dict, list, tuple)):
+                    stack.append((v, depth + 1))
+        elif isinstance(node, (list, tuple)):
+            for v in node:
+                if isinstance(v, (dict, list, tuple)):
+                    stack.append((v, depth + 1))
+    return None
+
+
+def _code_from(content: bytes) -> Optional[str]:
+    """A short error code from an error body (at most 4 KiB was read), or None. Never free text."""
     try:
-        body = resp.json()
+        body = json.loads(content.decode("utf-8"))
     except Exception:  # noqa: BLE001 - any parse failure means no code
         return None
     if not isinstance(body, dict):
@@ -109,12 +139,13 @@ def call(op: str, request: Any) -> Dict[str, Any]:
         return _refused(op, "unknown_operation")
     if not isinstance(request, dict) or not request:
         return _refused(op, "request_must_be_a_non_empty_object")
-    if any(k in request for k in _TENANT_KEYS):
-        return _refused(op, "tenant_is_configuration_not_an_argument")
     cfg, why = _config()
     if cfg is None:
         return _unavailable(op, why)
     base, key, tenant = cfg
+    problem = _tenant_problem(request, tenant)
+    if problem is not None:
+        return _refused(op, problem)
     body = dict(request)
     if spec["body_tenant"]:
         body["tenant_id"] = tenant
@@ -128,28 +159,37 @@ def call(op: str, request: Any) -> Dict[str, Any]:
                "Content-Type": "application/json", "Accept": "application/json"}
     try:
         with _client_factory(TIMEOUT_SECONDS) as client:
-            resp = client.post(base + spec["path"], content=raw, headers=headers)
+            with client.stream("POST", base + spec["path"], content=raw, headers=headers) as resp:
+                status = resp.status_code
+                if status == 404:
+                    return _unavailable(op, "surface_not_available")
+                if status == 429 or status >= 500:
+                    return _unavailable(op, "service_unavailable")
+                # Read only up to the cap; the rest of a longer body is never read.
+                limit = MAX_RESPONSE_BYTES if status == 200 else MAX_ERROR_BODY_BYTES
+                chunks, size = [], 0
+                for chunk in resp.iter_bytes():
+                    chunks.append(chunk)
+                    size += len(chunk)
+                    if size > limit:
+                        break
+                content = b"".join(chunks)
     except Exception:  # noqa: BLE001 - never return exception text (it can carry the URL)
         return _unavailable(op, "transport_error")
-    status = resp.status_code
-    if status == 404:
-        return _unavailable(op, "surface_not_available")
-    if status == 429 or status >= 500:
-        return _unavailable(op, "service_unavailable")
     if status != 200:
-        return _refused(op, "api_refused", _code_from(resp))
-    if len(resp.content) > MAX_RESPONSE_BYTES:
+        return _refused(op, "api_refused", None if len(content) > MAX_ERROR_BODY_BYTES else _code_from(content))
+    if len(content) > MAX_RESPONSE_BYTES:
         return _unavailable(op, "response_too_large")
     try:
-        answer = resp.json()
+        answer = json.loads(content.decode("utf-8"))
     except Exception:  # noqa: BLE001
         return _unavailable(op, "response_not_json")
     if not isinstance(answer, dict):
         return _unavailable(op, "response_wrong_shape")
     field = spec["field"]
     if field is not None:
-        if field not in answer:
-            return _unavailable(op, "response_wrong_shape")
+        if answer.get(field) is None:
+            return _unavailable(op, "missing_field")
         data = {field: answer[field]}
         for carry in ("overall", "trust_basis", "mode", "can_write", "can_execute"):
             if carry in answer:
