@@ -59,7 +59,7 @@ slh = [
 ]
 
 [project.urls]
-Homepage = "https://cwn-trust-gate.onrender.com"
+Homepage = "https://cyberwarriornetwork.com"
 Repository = "https://github.com/CWNApps/trust-gate-mcp"
 Issues = "https://github.com/CWNApps/trust-gate-mcp/issues"
 Changelog = "https://github.com/CWNApps/trust-gate-mcp/blob/main/CHANGELOG.md"
