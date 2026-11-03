@@ -1,4 +1,4 @@
-"""Trust Gate MCP Server -- hybrid-signed receipts for consequential agent actions.
+"""TrustGate MCP Server -- hybrid-signed receipts for consequential agent actions.
 
 A SELF-CONTAINED MCP server: it mints receipts locally via the open-source OpenAgentOntology
 primitive (Ed25519 + ML-DSA-65). No hosted backend
@@ -18,7 +18,7 @@ Sixteen tools (seven local; nine optional read-only API views, see api_ops.py):
 No receipt. No trust.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 from .server import build_server, main
 

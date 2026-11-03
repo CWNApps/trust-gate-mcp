@@ -1,8 +1,8 @@
-"""api_ops.py -- read-only views over a Trust Gate API deployment you run or subscribe to.
+"""api_ops.py -- read-only views over a TrustGate API deployment you run or subscribe to.
 
 These tools are OPT-IN. They do nothing until the operator sets three environment variables:
 
-  TRUST_GATE_API_URL     base URL of the Trust Gate API (https; http only for localhost)
+  TRUST_GATE_API_URL     base URL of the TrustGate API (https; http only for localhost)
   TRUST_GATE_API_KEY     bearer credential issued for ONE tenant
   TRUST_GATE_TENANT_ID   that tenant's id
 

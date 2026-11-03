@@ -7,8 +7,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trust-gate-mcp"
-version = "0.4.0"
-description = "MCP server for Trust Gate — tamper-evident receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65. Offline integrity check."
+version = "0.4.1"
+description = "MCP server for TrustGate — tamper-evident receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65. Offline integrity check."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"

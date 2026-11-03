@@ -1,4 +1,4 @@
-"""Trust Gate MCP server -- hybrid-signed agent-decision receipts as MCP tools.
+"""TrustGate MCP server -- hybrid-signed agent-decision receipts as MCP tools.
 
 One MCP server, sixteen tools (seven local, nine optional read-only API views), one shared signing primitive (the open-source
 OpenAgentOntology `mint_receipt`: Ed25519 + ML-DSA-65).
@@ -13,7 +13,7 @@ OpenAgentOntology `mint_receipt`: Ed25519 + ML-DSA-65).
   check_egress(destination, data_sample) -- egress data-classification check with receipt
   run_exit_drill()                       -- vendor exit readiness check with receipt
 
-Nine more tools are read-only views over a Trust Gate API (api_ops.py). They are off until
+Nine more tools are read-only views over a TrustGate API (api_ops.py). They are off until
 TRUST_GATE_API_URL, TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID are set; a missing setting or a 404 is UNAVAILABLE.
 
 Honesty constraints (encoded, not optional):
@@ -49,7 +49,7 @@ from typing import Any, Dict, List, Optional
 
 # One source of truth for the version a running server reports (the static server card, the MCP
 # registry entry and pyproject.toml must all say this; tests/test_release_consistency.py checks).
-SERVER_VERSION = "0.4.0"
+SERVER_VERSION = "0.4.1"
 
 # ---- the receipt primitive (one source of truth, hybrid-signed by default) ---------
 # If the package is not installed the tools return a clear, structured error rather than
@@ -603,7 +603,7 @@ _NOTE_NO_PQ = ("Ed25519 signature only: no post-quantum signature was produced o
 _MAX_CONTEXT_CHARS = 65536
 _GATE_POLICY_ID = "trust-gate-mcp default read-only-allowlist policy v2"
 _GATE_SCOPE_NOTE = (
-    "This verdict applies only to actions the caller routes through this gate. Trust Gate MCP "
+    "This verdict applies only to actions the caller routes through this gate. TrustGate MCP "
     "does not observe, intercept or block anything an agent does, and does not check afterward "
     "whether an action happened. ALLOW means the action name is a known read-only name with no "
     "risky or sensitive word anywhere; every other action is escalated or denied. That is a "
@@ -1109,7 +1109,7 @@ def tool_mint_action_receipt(
 def tool_verify_receipt(receipt: Dict[str, Any],
                         require_pq: Optional[bool] = None,
                         expected_kid: Optional[str] = None) -> Dict[str, Any]:
-    """Verify a Trust Gate receipt from the certificate alone (no DB, no network).
+    """Verify a TrustGate receipt from the certificate alone (no DB, no network).
 
     What "ok" means: the evidence is unchanged since it was signed, the receipt is signed, any Ed25519
     signer it names (public key or kid) has a valid signature on it and its kid matches that key, and
@@ -1468,7 +1468,7 @@ def build_server():
     # FastMCP's DNS-rebinding protection defaults to ON with an empty allow-list, which
     # rejects every request with 421 "Invalid Host header" behind a TLS-terminating proxy
     # (Render, Smithery gateway, Cloudflare, etc.). We disable it here because:
-    #   - Trust Gate is reached through an upstream proxy that you control
+    #   - TrustGate is reached through an upstream proxy that you control
     #   - CORS is wide open unless bearer auth is on (see server_http.py), so treat this as a proxy-level control
     #   - bearer-auth, when enabled, provides per-request authentication
     # This server has no switch for it: on a direct-exposure deploy put it behind a proxy that
@@ -1476,7 +1476,7 @@ def build_server():
     security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
     mcp = FastMCP("trust-gate", instructions=(
-        "Trust Gate -- tamper-evident, hybrid-signed receipts for consequential agent actions. "
+        "TrustGate -- tamper-evident, hybrid-signed receipts for consequential agent actions. "
         "All receipts reuse the open-source OpenAgentOntology mint_receipt (Ed25519 + ML-DSA-65). "
         "Integrity is verifiable offline from the "
         "receipt alone; authenticity needs the signer's Ed25519 kid pinned out of band."
@@ -1529,7 +1529,7 @@ def build_server():
             agent_id, operation, target, policy, inputs, decision,
             triggered_by_type, triggered_by_source, decision_model)
 
-    @mcp.tool(description="Verify a Trust Gate receipt from the certificate alone (offline). "
+    @mcp.tool(description="Verify a TrustGate receipt from the certificate alone (offline). "
               "ok=true means unchanged since signing, signed, kid consistent with the embedded key, "
               "and (require_pq default on) at least one post-quantum leg verified; unsigned receipts "
               "fail. It does not prove who signed: pass expected_kid to pin the signer's Ed25519 key; "
@@ -1584,7 +1584,7 @@ def build_server():
 _RO = (" Read-only view of the records you supply; it writes, signs and executes nothing. Needs TRUST_GATE_API_URL, "
        "TRUST_GATE_API_KEY and TRUST_GATE_TENANT_ID to be set, and the tenant comes from that setting, never from an "
        "argument. Returns status OK, REFUSED or UNAVAILABLE (a missing setting, a surface that is off, or an error is "
-       "UNAVAILABLE, never made-up data). The Trust Gate API must be a version that serves this view; it returns "
+       "UNAVAILABLE, never made-up data). The TrustGate API must be a version that serves this view; it returns "
        "UNAVAILABLE until then. A mapping or readout is not a compliance finding.")
 _API_TOOLS = (
     ("inspect_oversight_case", "Readiness report for one oversight case, computed from the records you supply." + _RO),

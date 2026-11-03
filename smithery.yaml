@@ -6,9 +6,9 @@ startCommand:
   type: http
   configSchema:
     type: object
-    title: Trust Gate MCP configuration
+    title: TrustGate MCP configuration
     description: >-
-      Trust Gate exposes signed-receipt tools and a decision gate. No secrets are required at the
+      TrustGate exposes signed-receipt tools and a decision gate. No secrets are required at the
       gateway. Post-quantum-required verification is on by default and is set by the
       TRUST_GATE_REQUIRE_PQ environment variable of the deployment, not by this schema.
     properties: {}

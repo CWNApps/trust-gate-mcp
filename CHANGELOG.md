@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.4.0 -- unreleased
+## 0.4.1 -- 2026-11-03
+
+**Name fix.** The product name is spelled TrustGate (one word) everywhere: package description, tool descriptions, server
+instructions, the HTTP landing page, README, registry metadata (server.json, glama.json, smithery.yaml) and the container
+image label. No tool, argument, result or signature changed.
+
+## 0.4.0 -- 2026-11-02
 
 **Nine optional, read-only API views.** `inspect_oversight_case`, `propose_role_question`, `get_intervention_evidence`,
 `compare_qualification_change`, `export_acceptance_pack`, `get_receipt_evidence`, `get_decision_evidence`, `replay_decision`
