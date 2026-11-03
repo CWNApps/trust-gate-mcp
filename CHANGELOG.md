@@ -6,6 +6,9 @@
 instructions, the HTTP landing page, README, registry metadata (server.json, glama.json, smithery.yaml) and the container
 image label. No tool, argument, result or signature changed.
 
+**Homepage link.** The package homepage now points to the TrustGate site, https://cyberwarriornetwork.com, instead of the
+hosted API address (pyproject.toml, glama.json, mcpmarket.md). The hosted API and pricing links are unchanged.
+
 ## 0.4.0 -- 2026-11-02
 
 **Nine optional, read-only API views.** `inspect_oversight_case`, `propose_role_question`, `get_intervention_evidence`,

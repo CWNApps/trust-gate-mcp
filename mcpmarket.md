@@ -125,7 +125,7 @@ Receipts are tamper-evident records that can support an audit trail. They do not
 Apache-2.0
 
 ## Links
-- Homepage: https://cwn-trust-gate.onrender.com
+- Homepage: https://cyberwarriornetwork.com
 - GitHub: https://github.com/CWNApps/trust-gate-mcp
 - Signing primitive: https://github.com/CWNApps/openagentontology
 - Pricing: https://cwn-trust-gate.onrender.com/pricing
