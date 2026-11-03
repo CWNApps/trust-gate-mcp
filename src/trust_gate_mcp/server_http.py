@@ -98,7 +98,7 @@ def build_app():
     # Anyone hitting the / route is NOT an MCP client (those POST to /mcp). Serving
     # a small HTML page is more useful than a 404 from Starlette.
     LANDING_HTML = """<!doctype html>
-<meta charset="utf-8"><title>Trust Gate MCP</title>
+<meta charset="utf-8"><title>TrustGate MCP</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 :root{--o:#FF4500;--c:#EFEBE2;--b:#0A0A0A;--m:JetBrains Mono,monospace}
@@ -119,7 +119,7 @@ a:hover{color:var(--o)}
 footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
 </style>
 <div class="kick">Cyber Warrior Network</div>
-<h1>Trust Gate <span>MCP.</span></h1>
+<h1>TrustGate <span>MCP.</span></h1>
 <script>
 // Channel-attribution ping. Fires once on landing.
 // ?via=<channel> -> /x?via=<channel>&kind=page. Sends only the label and kind, no personal data.
@@ -157,7 +157,7 @@ footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
     # curl example, so curious humans land somewhere useful instead of scary.
     # Real MCP clients (Smithery scan, Claude Desktop, any /mcp POST) are untouched.
     MCP_EXPLAINER_HTML = """<!doctype html>
-<meta charset="utf-8"><title>Trust Gate MCP endpoint</title>
+<meta charset="utf-8"><title>TrustGate MCP endpoint</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 :root{--o:#FF4500;--c:#EFEBE2;--b:#0A0A0A;--p:#1a1a18;--ln:#26261f;--m:JetBrains Mono,monospace}
@@ -177,7 +177,7 @@ a:hover{color:var(--o)}
 .btn:hover{background:var(--o);color:var(--b)}
 footer{margin-top:36px;font-family:var(--m);font-size:11px;color:#8b877e}
 </style>
-<div class="kick">Cyber Warrior Network &middot; Trust Gate</div>
+<div class="kick">Cyber Warrior Network &middot; TrustGate</div>
 <h1>This is an <span>MCP endpoint</span>, not a webpage.</h1>
 <p><span class="tag">MCP endpoint</span> If you got here from a link, you are in the right place &mdash; just the wrong format. MCP endpoints speak JSON-RPC over HTTP and require a specific <code>Accept</code> header. Your browser sent <code>text/html</code>; the server politely declined, exactly as the spec mandates.</p>
 

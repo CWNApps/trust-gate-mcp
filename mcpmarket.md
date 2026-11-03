@@ -1,7 +1,7 @@
-# Trust Gate — MCP Market Submission
+# TrustGate — MCP Market Submission
 
 ## Title
-Trust Gate — Hybrid-Signed Receipts for Consequential Agent Actions
+TrustGate — Hybrid-Signed Receipts for Consequential Agent Actions
 
 ## Tagline
 No Receipt. No Trust.
@@ -13,7 +13,7 @@ Mint tamper-evident receipts for agent actions, gate read-only actions with a si
 
 When an agent does something consequential — writes to a CRM, ships data to a third party, deploys — the question afterwards is not "did it seem fine?" but "can you prove what was decided, on what inputs, by which model, as the caller says?"
 
-Trust Gate answers that with a receipt. Every receipt is a hybrid-signed certificate that:
+TrustGate answers that with a receipt. Every receipt is a hybrid-signed certificate that:
 
 1. **Hashes the evidence** — in the record-change tool, old and new values are SHA-256 hashed (unsalted; the gate records its action and resource in clear text)
 2. **Signs it twice** — Ed25519, plus an ML-DSA-65 signature (the default backend is unhardened; see below)
@@ -55,7 +55,7 @@ That shows a post-quantum signature is present and valid, not whose key made it.
 | `check_egress` | Flag sensitive markers: NO_MARKERS_FOUND/INTERNAL/CONFIDENTIAL/RESTRICTED; credential-shaped values and personal identifiers are RESTRICTED and set `blocked` (the tool cannot block anything itself; NO_MARKERS_FOUND is not clearance) | Medium |
 | `run_exit_drill` | Vendor exit-readiness check. Informational; it signs one receipt, which creates the signing key on a host that has none yet | Low |
 
-The nine tools after `run_exit_drill` in the server's list are optional read-only API views (off until `TRUST_GATE_API_URL`, `TRUST_GATE_API_KEY` and `TRUST_GATE_TENANT_ID` are set; `UNAVAILABLE` otherwise; a readout is not a compliance finding; they need a Trust Gate API version that serves each view and return `UNAVAILABLE` until then): `inspect_oversight_case`, `propose_role_question`, `get_intervention_evidence`, `compare_qualification_change`, `export_acceptance_pack`, `get_receipt_evidence`, `get_decision_evidence`, `replay_decision`, `propose_requalification`.
+The nine tools after `run_exit_drill` in the server's list are optional read-only API views (off until `TRUST_GATE_API_URL`, `TRUST_GATE_API_KEY` and `TRUST_GATE_TENANT_ID` are set; `UNAVAILABLE` otherwise; a readout is not a compliance finding; they need a TrustGate API version that serves each view and return `UNAVAILABLE` until then): `inspect_oversight_case`, `propose_role_question`, `get_intervention_evidence`, `compare_qualification_change`, `export_acceptance_pack`, `get_receipt_evidence`, `get_decision_evidence`, `replay_decision`, `propose_requalification`.
 
 `audit_my_agent_inventory` ranks only what the caller passes in. MCP does not let a server
 enumerate its host's other servers, and the tool says so in its own output rather than
@@ -114,7 +114,7 @@ No required environment variables. All optional:
 
 The MCP server is **free and Apache-2.0** — self-contained, no account, no key.
 
-The hosted Trust Gate platform (managed policy, retained decision graph) is
+The hosted TrustGate platform (managed policy, retained decision graph) is
 priced separately at <https://cwn-trust-gate.onrender.com/pricing>.
 
 ## Evidence, not certification

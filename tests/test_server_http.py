@@ -72,7 +72,7 @@ def test_a_browser_visit_to_the_endpoint_gets_the_explainer_without_spending_a_t
         for _ in range(3):
             page = client.get("/mcp", headers={"accept": "text/html"})
             assert page.status_code == 200 and "MCP endpoint" in page.text
-        assert "Verify a Trust Gate receipt yourself" not in page.text
+        assert "Verify a TrustGate receipt yourself" not in page.text
         card = client.get("/.well-known/mcp/server-card.json")
         assert card.status_code == 200 and card.json()["version"]
 

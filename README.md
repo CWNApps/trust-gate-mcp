@@ -1,8 +1,8 @@
-# Trust Gate MCP
+# TrustGate MCP
 
 Tamper-evident receipts for consequential agent actions, as an MCP server, with a decision gate that returns ALLOW, DENY or ESCALATE.
 
-Sixteen tools: seven local ones on one shared signing primitive, the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`, plus nine optional read-only views over a Trust Gate API (see "Read-only API views" below).
+Sixteen tools: seven local ones on one shared signing primitive, the open-source [OpenAgentOntology](https://github.com/CWNApps/openagentontology) `mint_receipt`, plus nine optional read-only views over a TrustGate API (see "Read-only API views" below).
 
 **What actually gets signed depends on what you install** -- OAO detects its backend at import time, so this is worth stating plainly rather than advertising the best case:
 
@@ -25,7 +25,7 @@ PQ-required verify (the default) demands **at least one** verified post-quantum 
 
 ## Read-only API views (optional, off by default)
 
-Nine tools show what a Trust Gate API computes from records YOU supply. They do nothing until you set
+Nine tools show what a TrustGate API computes from records YOU supply. They do nothing until you set
 `TRUST_GATE_API_URL` (https; http only for localhost), `TRUST_GATE_API_KEY` (a bearer credential issued for one tenant) and
 `TRUST_GATE_TENANT_ID`. The seven local tools above need none of these and never call out.
 
@@ -48,7 +48,7 @@ Each takes one object, `request`, forwarded as the call body. Rules every one fo
 * **Fail closed.** A missing setting, a 404 (the surface is off or not deployed), a rate limit, a server error, a transport error or an answer of the wrong shape returns `status: "UNAVAILABLE"` with a `reason`. A refusal from the API returns `REFUSED` with its short `code`. Data is never filled in or defaulted.
 * **The credential is never logged or returned**, and no exception text is passed on.
 * **A mapping or readout is not a compliance finding.** Every result says so.
-* **Version match.** The receipt, decision, replay, propose and requalification views (`get_receipt_evidence`, `get_decision_evidence`, `replay_decision`, `propose_requalification`, `compare_qualification_change`) and the case, question, evidence and pack views need a Trust Gate API version that serves them. Against an older server, or one with the surface switched off, they return `UNAVAILABLE` (`surface_not_available`) until it does.
+* **Version match.** The receipt, decision, replay, propose and requalification views (`get_receipt_evidence`, `get_decision_evidence`, `replay_decision`, `propose_requalification`, `compare_qualification_change`) and the case, question, evidence and pack views need a TrustGate API version that serves them. Against an older server, or one with the surface switched off, they return `UNAVAILABLE` (`surface_not_available`) until it does.
 * Requests are capped at 64 KiB; answers are read up to 1 MiB (error bodies up to 4 KiB) and never further. 10 second timeout, no redirects, and proxy environment variables are ignored.
 
 ## What the gate does and does not do

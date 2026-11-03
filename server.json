@@ -1,13 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.CWNApps/trust-gate-mcp",
-  "title": "Trust Gate",
+  "title": "TrustGate",
   "description": "Signed receipts for agent actions and a read-only-allowlist decision gate. Ed25519 + ML-DSA-65.",
   "repository": {
     "url": "https://github.com/CWNApps/trust-gate-mcp",
     "source": "github"
   },
-  "version": "0.4.0",
+  "version": "0.4.1",
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "tool": "mcp-publisher",

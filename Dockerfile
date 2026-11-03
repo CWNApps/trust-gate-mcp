@@ -1,4 +1,4 @@
-# Trust Gate MCP -- Smithery container-runtime image.
+# TrustGate MCP -- Smithery container-runtime image.
 # Speaks MCP Streamable HTTP at /mcp on $PORT (Smithery sets PORT=8081).
 FROM python:3.12-slim
 

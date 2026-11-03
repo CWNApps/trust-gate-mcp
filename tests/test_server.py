@@ -1,4 +1,4 @@
-"""test_server.py -- E2E tests for the Trust Gate MCP server.
+"""test_server.py -- E2E tests for the TrustGate MCP server.
 
 Tests the pure tool functions directly (the FastMCP wiring is a thin decorator layer; the
 mcp package is only needed to actually run the server, not to unit-test the tools). Proves:
