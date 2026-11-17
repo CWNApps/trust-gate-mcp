@@ -88,7 +88,7 @@ bytes are never written to a receipt (the evidence bodies are downloaded only to
 pip install "trust-gate-mcp[pq]"                       # same package, installs the trust-gate-artex command
 export OAO_RECEIPT_KEY=/srv/example/keys/receipt.pem   # your signing key; back it up, and keep it off the ARTEX host if you can
 export ARTEX_URL=http://127.0.0.1:8787                 # no path, no credentials in the URL
-export ARTEX_USERNAME=admin
+export ARTEX_USERNAME=ARTEX                            # ARTEX has exactly one login, named ARTEX
 export ARTEX_PASSWORD_FILE=/srv/example/secrets/artex-password   # or ARTEX_PASSWORD; never put it on the command line
 
 trust-gate-artex sync --out /srv/example/artex-receipts --instance-name acme-lab --init-key   # --init-key only the first time
@@ -108,10 +108,13 @@ trust-gate-artex sync --out /srv/example/artex-receipts --instance-name acme-lab
 * **Cron.** Run it as a dedicated user, hourly at most is plenty: `17 * * * * trust-gate-artex sync --out ... --instance-name ...`.
   Alert on any non-zero exit. A run holds a lock, so overlapping runs refuse (exit 3) instead of racing.
 * **ARTEX credentials.** ARTEX has no scoped tokens: the login you give this tool is a full admin login (a 7-day token).
-  Create a separate account for it, keep the password file at mode 0600, and if ARTEX is reached through a reverse proxy,
-  allow only the five read paths the tool uses: `POST /api/auth/login`, `GET /api/health`, `GET /api/exploration/findings`,
-  `GET /api/exploration/findings/{id}`, and `GET /api/exploration/findings/{id}/traffic/{binding}/body`. The tool never
-  follows a redirect and ignores proxy environment variables.
+  ARTEX has a single account, so this tool holds the same password as your operators: keep the password file at mode 0600
+  and rotate it if the host is shared. If ARTEX is reached through a reverse proxy, allow only the six paths the tool uses:
+  `POST /api/auth/login`, `GET /api/health`, `GET /api/exploration/findings`, `GET /api/exploration/findings/{id}`,
+  `GET /api/exploration/findings/{id}/traffic`, and `GET /api/exploration/findings/{id}/traffic/{binding}/body`. The tool
+  never follows a redirect and ignores proxy environment variables.
+
+Tested live against ARTEX v0.6.0 (see the review record in the CWN deployment repo): first run, unchanged rerun, status change, swapped evidence, tampered record, wrong kid and a deleted finding all behave as described.
 
 Verify, on any machine that has the package and the signing key's `kid` (printed in the summary, and by `verify_receipt`):
 

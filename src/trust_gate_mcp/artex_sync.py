@@ -44,7 +44,7 @@ REASONS = frozenset({
     "login_failed", "login_blocked", "version_unavailable", "http_status", "redirect", "bad_json",
     "json_too_large", "missing_field", "bad_type", "bad_id", "bad_text", "evidence_hash_mismatch",
     "length_mismatch", "body_missing", "body_too_large", "too_many_bindings", "receipt_invalid",
-    "sign_failed", "write_failed", "finding_gone", "count_mismatch", "deadline_exceeded",
+    "sign_failed", "write_failed", "finding_gone", "count_mismatch", "deadline_exceeded", "evidence_changed",
 })
 
 _KEY_RE = re.compile(r"[0-9A-Za-z_-]{1,64}")
@@ -384,6 +384,25 @@ class ArtexApi:
         if not isinstance(body, dict):
             raise Fail("bad_json")
         return body
+
+    def detail_with_traffic(self, key: str) -> Dict[str, Any]:
+        """The finding detail plus its evidence bindings. ARTEX v0.6.0 serves the bindings only from
+        GET .../findings/{id}/traffic (the detail omits them), as {"finding_id", "version", "bindings": [...]}.
+        The two answers must describe the same evidence version and the same number of bindings."""
+        detail = self.detail(key)
+        body = self._json("GET", f"/api/exploration/findings/{key}/traffic")
+        if not isinstance(body, dict) or not isinstance(body.get("bindings"), list):
+            raise Fail("bad_json")
+        if body.get("finding_id") != key:
+            raise Fail("bad_id")
+        ver, count = detail.get("evidence_version"), detail.get("traffic_count")
+        if isinstance(body.get("version"), bool) or body.get("version") != ver:
+            raise Fail("evidence_changed")
+        if count is not None and (isinstance(count, bool) or count != len(body["bindings"])):
+            raise Fail("evidence_changed")
+        merged = dict(detail)
+        merged["traffic_bindings"] = body["bindings"]
+        return merged
 
     def hash_body(self, key: str, binding_id: str, side: str, claimed_len: int, max_body: int) -> Tuple[str, int]:
         if claimed_len > max_body:
@@ -781,7 +800,7 @@ def sync(api: ArtexApi, out: Path, instance_name: str, artex_origin: str, opts: 
             continue
         observed = _iso(_utcnow())
         try:
-            detail = api.detail(key)
+            detail = api.detail_with_traffic(key)
             if finding_key(detail) != key:
                 raise Fail("bad_id")
             claimed = claimed_bodies(detail)

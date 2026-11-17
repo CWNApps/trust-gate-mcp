@@ -52,6 +52,7 @@ class FakeArtex:
         self.token = "tok-SECRET-123"
         self.redirect_findings = False
         self.fail_detail = {}
+        self.traffic_version = {}
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         p = request.url.path
@@ -78,7 +79,16 @@ class FakeArtex:
                 return httpx.Response(self.fail_detail[k])
             if k not in self.findings:
                 return httpx.Response(404, json={})
-            return httpx.Response(200, json=self.findings[k])
+            d = dict(self.findings[k])
+            d["traffic_count"] = len(d.pop("traffic_bindings", []))
+            return httpx.Response(200, json=d)
+        if len(parts) == 6 and parts[3] == "findings" and parts[5] == "traffic":
+            k = parts[4]
+            if k not in self.findings:
+                return httpx.Response(404, json={})
+            f = self.findings[k]
+            ver = self.traffic_version.get(k, f["evidence_version"])
+            return httpx.Response(200, json={"finding_id": k, "version": ver, "bindings": f.get("traffic_bindings", [])})
         if len(parts) == 8 and parts[5] == "traffic" and parts[7] == "body":
             body = self.bodies.get((parts[4], parts[6], request.url.params["side"]))
             if body is None:
@@ -213,6 +223,13 @@ def test_bad_finding_shape_is_a_named_failure(fake, tmp_path, capsys):
     fake.findings["f1"] = make_finding("f1", poe_level="two")
     code, o, _, _ = run(tmp_path, capsys)
     assert code == 1 and {"key": "f1", "reason": "bad_type"} in summary(o)["failures"]
+
+
+def test_evidence_version_race_between_detail_and_traffic_is_a_failure(fake, tmp_path, capsys):
+    fake.traffic_version["f1"] = 99
+    code, o, _, out = run(tmp_path, capsys)
+    assert code == 1 and {"key": "f1", "reason": "evidence_changed"} in summary(o)["failures"]
+    assert not list(out.rglob("*.receipt.json"))
 
 
 def test_one_bad_finding_does_not_stop_the_others(fake, tmp_path, capsys):

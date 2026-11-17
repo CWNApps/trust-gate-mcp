@@ -11,7 +11,7 @@ name are never allowed, and that `/mcp` answers without a redirect. No tool, arg
 customer's own ARTEX, reads its findings over ARTEX's REST API, and signs a receipt per finding and per change with the
 operator's key. Receipts hold hashes and ids only, are chained per finding, and carry their own `issuer_tool`
 (`artex_sync_record`) so a client of the MCP server cannot forge one. `verify` checks a pair or a whole output directory.
-Tested against a fake ARTEX; not yet run against a live ARTEX. No existing tool, argument, verdict or signature changed.
+Tested against a fake ARTEX and, on 2026-11-17, against a live ARTEX v0.6.0 (which showed the evidence bindings come from a separate `/traffic` endpoint, now read). No existing tool, argument, verdict or signature changed.
 
 ## 0.4.1 -- 2026-11-03
 

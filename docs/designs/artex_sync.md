@@ -33,8 +33,11 @@ Asked for by Spectre (2026-11-17) as the customer-facing "pentest findings with 
   - `GET /api/health` with the token returns `{"service","version"}`.
   - `GET /api/exploration/findings?page=N&limit=200` returns `{items,total,page,page_size}`, newest first.
   - `GET /api/exploration/findings/{id}` returns one finding. Many keys are omitted when empty (`name`, `task_id`, `report`,
-    `assets`, `traffic_bindings`, `finding_id`, `counterevidence`, `confidence_rationale`); a finding with no HTTP traffic
-    legitimately has no bindings.
+    `assets`, `counterevidence`, `confidence_rationale`). It carries `traffic_count` but NOT the bindings (found in the live
+    run against v0.6.0, 2026-11-17; the DTO has a `traffic_bindings` field that the detail endpoint leaves empty).
+  - `GET /api/exploration/findings/{id}/traffic` returns `{finding_id, version, bindings: [...]}`. The bridge reads it after the
+    detail and fails the finding with `evidence_changed` if `version` differs from the detail's `evidence_version` or the
+    binding count differs from `traffic_count` (the evidence moved between the two requests).
   - A traffic binding (`id`, `role`, `note`, `position`, `created_at`) holds a `snapshot` (`id`, `method`, `url`, `status`,
     `captured_at`, `req_hash`, `resp_hash` as sha256 hex, `req_len`, `resp_len`).
   - `GET /api/exploration/findings/{id}/traffic/{binding_id}/body?side=request|response&download=1` streams one body; ARTEX
