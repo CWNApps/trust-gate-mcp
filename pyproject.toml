@@ -66,6 +66,7 @@ Changelog = "https://github.com/CWNApps/trust-gate-mcp/blob/main/CHANGELOG.md"
 
 [project.scripts]
 trust-gate-mcp = "trust_gate_mcp.server:main"
+trust-gate-artex = "trust_gate_mcp.artex_sync:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trust_gate_mcp"]

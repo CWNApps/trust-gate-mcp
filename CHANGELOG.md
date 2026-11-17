@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+**ARTEX guide.** `docs/artex.md` shows how to run this server over HTTP for an ARTEX autonomous pentest deployment,
+register it as a remote MCP server there, and prompt ARTEX agents to call `gate_decision` and `mint_action_receipt`.
+`tests/test_artex_actions.py` pins that the scanning, exploitation, credential and data-dump actions ARTEX workers
+name are never allowed, and that `/mcp` answers without a redirect. No tool, argument, verdict or signature changed.
+
+**`trust-gate-artex`: a receipt for every ARTEX finding.** New command (`trust_gate_mcp.artex_sync`) that runs next to a
+customer's own ARTEX, reads its findings over ARTEX's REST API, and signs a receipt per finding and per change with the
+operator's key. Receipts hold hashes and ids only, are chained per finding, and carry their own `issuer_tool`
+(`artex_sync_record`) so a client of the MCP server cannot forge one. `verify` checks a pair or a whole output directory.
+Tested against a fake ARTEX and, on 2026-11-17, against a live ARTEX v0.6.0 (which showed the evidence bindings come from a separate `/traffic` endpoint, now read). No existing tool, argument, verdict or signature changed.
+
 ## 0.4.1 -- 2026-11-03
 
 **Name fix.** The product name is spelled TrustGate (one word) everywhere: package description, tool descriptions, server
