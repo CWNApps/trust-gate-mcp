@@ -65,7 +65,7 @@ def test_the_server_card_is_built_from_the_running_server():
 
 SHIPPED_TEXT = ("pyproject.toml", ".github/workflows/publish-pypi.yml", ".github/workflows/publish-ghcr.yml", ".github/workflows/tests.yml",
                 "src/trust_gate_mcp/__init__.py", "src/trust_gate_mcp/server.py", "src/trust_gate_mcp/server_http.py",
-                "src/trust_gate_mcp/bootstrap.py", "src/trust_gate_mcp/rate_limit.py", "src/trust_gate_mcp/auth.py",
+                "src/trust_gate_mcp/bootstrap.py", "src/trust_gate_mcp/rate_limit.py", "src/trust_gate_mcp/auth.py", "src/trust_gate_mcp/artex_sync.py", "docs/artex.md",
                 "README.md", "glama.json", "mcpmarket.md", "server.json", "smithery.yaml", "Dockerfile")
 
 STALE = [
