@@ -90,6 +90,8 @@ The HTTP entrypoint counts `?via=<label>` visits as one log line (label, kind, u
 
 DNS-rebinding protection is off and there is no switch for it: on a local HTTP server without bearer auth, any web page you visit can call it. Put it behind a proxy that checks the Host header, or set `TRUST_GATE_BEARER_TOKEN`.
 
+**With ARTEX.** To let an [ARTEX](https://github.com/BaaRai/ARTEX) autonomous pentest deployment call the gate and mint receipts over HTTP, see [docs/artex.md](./docs/artex.md).
+
 ## Install (stdio)
 
 ```bash

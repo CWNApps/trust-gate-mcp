@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**ARTEX guide.** `docs/artex.md` shows how to run this server over HTTP for an ARTEX autonomous pentest deployment,
+register it as a remote MCP server there, and prompt ARTEX agents to call `gate_decision` and `mint_action_receipt`.
+`tests/test_artex_actions.py` pins that the scanning, exploitation, credential and data-dump actions ARTEX workers
+name are never allowed, and that `/mcp` answers without a redirect. No tool, argument, verdict or signature changed.
+
 ## 0.4.1 -- 2026-11-03
 
 **Name fix.** The product name is spelled TrustGate (one word) everywhere: package description, tool descriptions, server
